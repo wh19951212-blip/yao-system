@@ -1,7 +1,8 @@
 /** 修改此处即可全局更换系统名称 */
 export const appConfig = {
-  name: '内部投资管理系统',
-  shortName: '投资管理',
+  name: 'YAO 投资管理系统',
+  shortName: 'YAO',
+  copyright: 'YAO Real Estate Investment',
 }
 
 export const INVESTOR_GRADES = ['S', 'A', 'B', 'C'] as const

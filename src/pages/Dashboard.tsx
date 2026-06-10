@@ -18,6 +18,8 @@ import {
   formatDateTime,
   daysSinceContact,
 } from '@/services/investors'
+import { isSupabaseConfigured, getSupabaseConfigHint } from '@/lib/supabase'
+import { DashboardLoadError } from '@/utils/supabaseError'
 import { AFTER_SALES_REMINDER_DAYS } from '@/config/app'
 import type { DashboardData } from '@/types/database'
 
@@ -27,15 +29,46 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [errorStep, setErrorStep] = useState('')
   const [todoOpen, setTodoOpen] = useState(false)
 
   useEffect(() => {
+    setLoading(true)
+    setError('')
+    setErrorStep('')
+
+    console.info('[Dashboard] 开始加载', {
+      ownerEmail,
+      supabaseConfigured: isSupabaseConfigured(),
+      configHint: getSupabaseConfigHint(),
+    })
+
     fetchDashboardData(ownerEmail)
       .then((dashboardData) => {
+        console.info('[Dashboard] 加载成功', {
+          investors: dashboardData.totals.investors,
+          overdue: dashboardData.overdueInvestors.length,
+        })
         setData(dashboardData)
         if (shouldShowDailyTodo()) setTodoOpen(true)
       })
-      .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
+      .catch((err) => {
+        const step =
+          err instanceof DashboardLoadError ? err.step : 'unknown'
+        const message =
+          err instanceof Error ? err.message : '加载失败'
+
+        console.error('[Dashboard] 加载失败', {
+          step,
+          message,
+          ownerEmail,
+          supabaseConfigured: isSupabaseConfigured(),
+          error: err,
+        })
+
+        setErrorStep(step)
+        setError(message)
+      })
       .finally(() => setLoading(false))
   }, [ownerEmail])
 
@@ -50,7 +83,28 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="page-shell">
-        <div className="alert-error">加载失败：{error}</div>
+        <div className="alert-error space-y-2">
+          <p className="font-medium">加载失败：{error}</p>
+          {errorStep && (
+            <p className="text-sm opacity-90">失败步骤：{errorStep}</p>
+          )}
+          {errorStep === 'env' && (
+            <p className="text-sm opacity-90">
+              Vercel 部署需在 Build 前配置 VITE_SUPABASE_URL 和
+              VITE_SUPABASE_ANON_KEY，然后重新 Deploy。
+            </p>
+          )}
+          {errorStep === 'fetchInvestors' && (
+            <p className="text-sm opacity-90">
+              常见原因：investors 表不存在、RLS 权限不足、或列名不匹配（需有 level /
+              budget_wan 字段）。请在 Supabase SQL Editor 运行
+              supabase/fix_permissions.sql。
+            </p>
+          )}
+          <p className="text-xs opacity-75">
+            详细错误已输出到浏览器控制台（Console → [Dashboard]）。
+          </p>
+        </div>
       </div>
     )
   }

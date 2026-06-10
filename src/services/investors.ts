@@ -21,6 +21,9 @@ import type {
 } from '@/types/database'
 import { INVESTOR_GRADES, INVESTOR_STAGES, AFTER_SALES_REMINDER_DAYS, type InvestorGrade } from '@/config/app'
 import { getAppSettings } from '@/services/settings'
+import { DashboardLoadError } from '@/utils/supabaseError'
+import { safeParseISO } from '@/utils/safeDate'
+import { isSupabaseConfigured, getSupabaseConfigHint } from '@/lib/supabase'
 import {
   differenceInDays,
   endOfMonth,
@@ -129,7 +132,11 @@ export async function fetchInvestors(
   }
 
   const { data, error } = await query
-  if (error) throw error
+  if (error) {
+    throw new Error(
+      `investors 查询失败：${error.message}${error.code ? ` (${error.code})` : ''}`,
+    )
+  }
   return ((data ?? []) as InvestorRow[]).map(mapInvestorFromRow)
 }
 
@@ -360,9 +367,9 @@ export function getOverdueInvestors(investors: Investor[]) {
   return investors.filter((investor) => {
     if (investor.after_sales_mode) return false
     if (!investor.last_contact_at) return true
-    return (
-      differenceInDays(now, parseISO(investor.last_contact_at)) > limit
-    )
+    const lastContact = safeParseISO(investor.last_contact_at)
+    if (!lastContact) return true
+    return differenceInDays(now, lastContact) > limit
   })
 }
 
@@ -371,10 +378,9 @@ export function getAfterSalesOverdueInvestors(investors: Investor[]) {
   return investors.filter((investor) => {
     if (!investor.after_sales_mode) return false
     if (!investor.last_contact_at) return true
-    return (
-      differenceInDays(now, parseISO(investor.last_contact_at)) >
-      AFTER_SALES_REMINDER_DAYS
-    )
+    const lastContact = safeParseISO(investor.last_contact_at)
+    if (!lastContact) return true
+    return differenceInDays(now, lastContact) > AFTER_SALES_REMINDER_DAYS
   })
 }
 
@@ -389,8 +395,10 @@ export function getDeadlineDaysLeft(deadline: string | null): {
   daysLeft: number
 } | null {
   if (!deadline) return null
+  const deadlineDate = safeParseISO(deadline)
+  if (!deadlineDate) return null
   const { followUpReminderDays, deadlineReminderDays } = getAppSettings()
-  const daysLeft = differenceInDays(parseISO(deadline), new Date())
+  const daysLeft = differenceInDays(deadlineDate, new Date())
   if (daysLeft < 0) return { urgency: 'expired', daysLeft }
   if (daysLeft <= deadlineReminderDays) return { urgency: 'within3', daysLeft }
   if (daysLeft <= followUpReminderDays) return { urgency: 'within7', daysLeft }
@@ -401,8 +409,8 @@ export function getUpcomingDeadlineInvestors(investors: Investor[]) {
   return investors
     .filter((investor) => getDeadlineDaysLeft(investor.deadline) !== null)
     .sort((a, b) => {
-      const da = parseISO(a.deadline!).getTime()
-      const db = parseISO(b.deadline!).getTime()
+      const da = safeParseISO(a.deadline!)?.getTime() ?? 0
+      const db = safeParseISO(b.deadline!)?.getTime() ?? 0
       return da - db
     })
 }
@@ -421,9 +429,10 @@ function buildPoolTrend(investors: Investor[]): PoolTrendPoint[] {
   for (let i = 5; i >= 0; i -= 1) {
     const monthDate = subMonths(now, i)
     const monthEnd = endOfMonth(monthDate)
-    const subset = investors.filter(
-      (inv) => parseISO(inv.created_at) <= monthEnd,
-    )
+    const subset = investors.filter((inv) => {
+      const created = safeParseISO(inv.created_at)
+      return created !== null && created <= monthEnd
+    })
     points.push({
       month: format(monthDate, 'M月'),
       totalBudget: subset.reduce((sum, inv) => sum + (inv.budget ?? 0), 0),
@@ -441,23 +450,58 @@ function countCreatedThisMonth(dates: string[]) {
   const now = new Date()
   const start = startOfMonth(now)
   const end = endOfMonth(now)
-  return dates.filter((d) =>
-    isWithinInterval(parseISO(d), { start, end }),
-  ).length
+  return dates.filter((d) => {
+    const parsed = safeParseISO(d)
+    if (!parsed) return false
+    return isWithinInterval(parsed, { start, end })
+  }).length
+}
+
+function emptyDashboardStats(): DashboardStats {
+  return {
+    newInvestorsThisMonth: 0,
+    newPropertiesThisMonth: 0,
+    closedContractsThisMonth: 0,
+    stageDistribution: INVESTOR_STAGES.map((stage) => ({ stage, count: 0 })),
+    poolTrend: [],
+    stageUpgradesThisMonth: INVESTOR_STAGES.map((stage) => ({
+      stage,
+      count: 0,
+    })),
+    abandonReasonStats: [],
+  }
 }
 
 async function buildDashboardStats(
   investors: Investor[],
   ownerEmail?: string | null,
 ): Promise<DashboardStats> {
-  const properties = await fetchProperties('all', ownerEmail)
-  const lands = await fetchLands(ownerEmail)
-  let contracts = await fetchContracts()
-  if (ownerEmail) {
-    const ownedIds = new Set(investors.map((i) => i.id))
-    contracts = contracts.filter(
-      (c) => c.investor_id && ownedIds.has(c.investor_id),
-    )
+  let properties: Awaited<ReturnType<typeof fetchProperties>> = []
+  let lands: Awaited<ReturnType<typeof fetchLands>> = []
+  let contracts: Awaited<ReturnType<typeof fetchContracts>> = []
+
+  try {
+    properties = await fetchProperties('all', ownerEmail)
+  } catch (err) {
+    console.error('[Dashboard] fetchProperties failed:', err)
+  }
+
+  try {
+    lands = await fetchLands(ownerEmail)
+  } catch (err) {
+    console.error('[Dashboard] fetchLands failed:', err)
+  }
+
+  try {
+    contracts = await fetchContracts()
+    if (ownerEmail) {
+      const ownedIds = new Set(investors.map((i) => i.id))
+      contracts = contracts.filter(
+        (c) => c.investor_id && ownedIds.has(c.investor_id),
+      )
+    }
+  } catch (err) {
+    console.error('[Dashboard] fetchContracts failed:', err)
   }
 
   const now = new Date()
@@ -468,13 +512,24 @@ async function buildDashboardStats(
     if (c.status !== '已完成') return false
     const dateStr = c.signed_date ?? c.created_at
     if (!dateStr) return false
-    return isWithinInterval(parseISO(dateStr), { start: monthStart, end: monthEnd })
+    const parsed = safeParseISO(dateStr)
+    if (!parsed) return false
+    return isWithinInterval(parsed, { start: monthStart, end: monthEnd })
   }).length
 
   const abandonReasonStats = buildAbandonReasonStats(lands)
-  const stageUpgradesThisMonth = await fetchStageUpgradesThisMonth(
-    ownerEmail ? investors.map((i) => i.id) : undefined,
-  )
+  let stageUpgradesThisMonth = INVESTOR_STAGES.map((stage) => ({
+    stage,
+    count: 0,
+  }))
+
+  try {
+    stageUpgradesThisMonth = await fetchStageUpgradesThisMonth(
+      ownerEmail ? investors.map((i) => i.id) : undefined,
+    )
+  } catch (err) {
+    console.error('[Dashboard] fetchStageUpgradesThisMonth failed:', err)
+  }
 
   return {
     newInvestorsThisMonth: countCreatedThisMonth(
@@ -504,7 +559,21 @@ function buildAbandonReasonStats(lands: Awaited<ReturnType<typeof fetchLands>>) 
 export async function fetchDashboardData(
   ownerEmail?: string | null,
 ): Promise<DashboardData> {
-  const investors = await fetchInvestors('all', ownerEmail)
+  if (!isSupabaseConfigured()) {
+    throw new DashboardLoadError(
+      'env',
+      new Error(getSupabaseConfigHint() ?? 'Supabase 环境变量未配置'),
+    )
+  }
+
+  let investors: Investor[]
+  try {
+    investors = await fetchInvestors('all', ownerEmail)
+  } catch (err) {
+    console.error('[Dashboard] fetchInvestors failed:', err)
+    throw new DashboardLoadError('fetchInvestors', err)
+  }
+
   const overdueInvestors = getOverdueInvestors(investors)
   const afterSalesOverdueInvestors = getAfterSalesOverdueInvestors(investors)
   const upcomingDeadlineInvestors = getUpcomingDeadlineInvestors(investors)
@@ -513,7 +582,14 @@ export async function fetchDashboardData(
     (sum, i) => sum + (i.confirmed_amount ?? 0),
     0,
   )
-  const stats = await buildDashboardStats(investors, ownerEmail)
+
+  let stats: DashboardStats
+  try {
+    stats = await buildDashboardStats(investors, ownerEmail)
+  } catch (err) {
+    console.error('[Dashboard] buildDashboardStats failed:', err)
+    stats = emptyDashboardStats()
+  }
 
   return {
     pools: buildPoolStats(investors),

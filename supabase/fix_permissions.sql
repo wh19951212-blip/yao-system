@@ -3,6 +3,21 @@
 -- 在 Supabase Dashboard > SQL Editor 中粘贴并 Run
 -- ================================================
 
+-- 0. 投资人 / 土地 / 跟进（仪表盘 fetchInvestors 依赖 investors 表读权限）
+alter table investors enable row level security;
+drop policy if exists "allow all" on investors;
+drop policy if exists "Authenticated users can read investors" on investors;
+drop policy if exists "Authenticated users can insert investors" on investors;
+drop policy if exists "Authenticated users can update investors" on investors;
+create policy "allow all" on investors for all using (true) with check (true);
+
+alter table lands enable row level security;
+drop policy if exists "allow all" on lands;
+drop policy if exists "Authenticated users can read lands" on lands;
+drop policy if exists "Authenticated users can insert lands" on lands;
+drop policy if exists "Authenticated users can update lands" on lands;
+create policy "allow all" on lands for all using (true) with check (true);
+
 -- 1. contracts 表补充字段（解决 join 查询失败）
 alter table contracts add column if not exists land_id uuid references lands(id);
 alter table contracts add column if not exists property_id uuid references properties(id);

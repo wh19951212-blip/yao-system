@@ -41,14 +41,13 @@ export default function Sidebar() {
     <aside className="hidden md:flex w-56 shrink-0 bg-[#1B2B4B] flex-col">
       <div className="h-16 flex items-center px-5 border-b border-white/10">
         <div className="w-8 h-8 rounded-lg bg-white/10 border border-[#C9A84C]/40 flex items-center justify-center mr-3">
-          <span className="text-[#C9A84C] text-sm font-bold">投</span>
+          <span className="text-[#C9A84C] text-sm font-bold">Y</span>
         </div>
         <div>
           <p className="text-sm font-semibold text-white leading-tight">
             {appConfig.shortName}
-            <span className="text-[#C9A84C]">.</span>
           </p>
-          <p className="text-[10px] text-white/50">Real Estate Investment</p>
+          <p className="text-[10px] text-white/50">{appConfig.copyright}</p>
         </div>
       </div>
 

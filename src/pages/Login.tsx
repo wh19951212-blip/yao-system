@@ -45,7 +45,7 @@ export default function Login() {
         </div>
         <div className="relative max-w-md">
           <div className="w-14 h-14 rounded-xl bg-white/10 border border-[#C9A84C]/40 flex items-center justify-center mb-8">
-            <span className="text-[#C9A84C] text-xl font-bold">投</span>
+            <span className="text-[#C9A84C] text-xl font-bold">Y</span>
           </div>
           <h1 className="text-3xl font-semibold text-white mb-4 tracking-tight">
             {appConfig.name}
