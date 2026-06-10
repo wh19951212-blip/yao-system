@@ -15,24 +15,36 @@ export async function fetchProperties(
   status?: PropertyStatus | 'all',
   ownerEmail?: string | null,
 ) {
-  let query = supabase
-    .from('properties')
-    .select('*')
-    .order('updated_at', { ascending: false })
-
-  if (status && status !== 'all') {
-    const legacyValues: Record<PropertyStatus, string[]> = {
-      進行中: ['進行中', '洽谈中'],
-      販売中: ['販売中', '上架'],
-      '終了&不合格': ['終了&不合格', '已售'],
+  const runQuery = (orderColumn: 'updated_at' | 'created_at' | null) => {
+    let query = supabase.from('properties').select('*')
+    if (orderColumn) {
+      query = query.order(orderColumn, { ascending: false })
     }
-    query = query.in('status', legacyValues[status] ?? [status])
-  }
-  if (ownerEmail) {
-    query = query.eq('owner', ownerEmail)
+    if (status && status !== 'all') {
+      const legacyValues: Record<PropertyStatus, string[]> = {
+        進行中: ['進行中', '洽谈中'],
+        販売中: ['販売中', '上架'],
+        '終了&不合格': ['終了&不合格', '已售'],
+      }
+      query = query.in('status', legacyValues[status] ?? [status])
+    }
+    if (ownerEmail) {
+      query = query.eq('owner', ownerEmail)
+    }
+    return query
   }
 
-  const { data, error } = await query
+  let { data, error } = await runQuery('updated_at')
+  if (
+    error &&
+    (error.code === '42703' || error.message.includes('updated_at'))
+  ) {
+    ;({ data, error } = await runQuery('created_at'))
+  }
+  if (error) {
+    ;({ data, error } = await runQuery(null))
+  }
+
   if (error) throw error
   return ((data ?? []) as Property[]).map(normalizeProperty)
 }

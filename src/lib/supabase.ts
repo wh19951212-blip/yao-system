@@ -10,7 +10,8 @@ export function isSupabaseConfigured(): boolean {
     supabaseUrl &&
       supabaseAnonKey &&
       supabaseUrl !== PLACEHOLDER_URL &&
-      !supabaseUrl.includes('your-project-id'),
+      !supabaseUrl.includes('your-project-id') &&
+      !supabaseAnonKey.includes('your-supabase-anon-key'),
   )
 }
 
@@ -24,12 +25,38 @@ export function getSupabaseConfigHint(): string | null {
   return null
 }
 
+function maskKey(key: string): string {
+  if (!key) return '(空)'
+  if (key.length <= 12) return '***'
+  return `${key.slice(0, 8)}…${key.slice(-4)}`
+}
+
+/** 供仪表盘错误页展示的环境诊断信息 */
+export function getSupabaseEnvDebug() {
+  return {
+    url: supabaseUrl || '(空)',
+    keyPreview: maskKey(supabaseAnonKey),
+    keyLength: supabaseAnonKey.length,
+    configured: isSupabaseConfigured(),
+    hint: getSupabaseConfigHint(),
+    isPublishableKey: supabaseAnonKey.startsWith('sb_publishable_'),
+  }
+}
+
+if (import.meta.env.DEV || import.meta.env.PROD) {
+  console.log('[Supabase] VITE_SUPABASE_URL =', supabaseUrl || '(空)')
+  console.log(
+    '[Supabase] VITE_SUPABASE_ANON_KEY =',
+    maskKey(supabaseAnonKey),
+    `(length ${supabaseAnonKey.length})`,
+  )
+  console.log('[Supabase] configured =', isSupabaseConfigured())
+}
+
 if (!isSupabaseConfigured()) {
   console.error(
     '[Supabase] 环境变量未正确配置。',
     getSupabaseConfigHint(),
-    '当前 URL:',
-    supabaseUrl || '(空)',
   )
 }
 

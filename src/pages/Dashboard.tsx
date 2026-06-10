@@ -18,8 +18,13 @@ import {
   formatDateTime,
   daysSinceContact,
 } from '@/services/investors'
-import { isSupabaseConfigured, getSupabaseConfigHint } from '@/lib/supabase'
+import { getSupabaseEnvDebug, isSupabaseConfigured } from '@/lib/supabase'
 import { DashboardLoadError } from '@/utils/supabaseError'
+import {
+  diagnoseDashboardTables,
+  type TableDiagnostic,
+} from '@/utils/dashboardDiagnostics'
+import Button from '@/components/ui/Button'
 import { AFTER_SALES_REMINDER_DAYS } from '@/config/app'
 import type { DashboardData } from '@/types/database'
 
@@ -30,17 +35,29 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [errorStep, setErrorStep] = useState('')
+  const [errorCode, setErrorCode] = useState('')
+  const [errorDetails, setErrorDetails] = useState('')
+  const [tableDiagnostics, setTableDiagnostics] = useState<TableDiagnostic[]>([])
+  const [envDebug] = useState(() => getSupabaseEnvDebug())
+  const [reloadKey, setReloadKey] = useState(0)
   const [todoOpen, setTodoOpen] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setError('')
     setErrorStep('')
+    setErrorCode('')
+    setErrorDetails('')
+    setTableDiagnostics([])
 
+    const env = getSupabaseEnvDebug()
     console.info('[Dashboard] 开始加载', {
       ownerEmail,
-      supabaseConfigured: isSupabaseConfigured(),
-      configHint: getSupabaseConfigHint(),
+      reloadKey,
+      supabaseUrl: env.url,
+      supabaseKeyPreview: env.keyPreview,
+      supabaseConfigured: env.configured,
+      configHint: env.hint,
     })
 
     fetchDashboardData(ownerEmail)
@@ -52,7 +69,7 @@ export default function Dashboard() {
         setData(dashboardData)
         if (shouldShowDailyTodo()) setTodoOpen(true)
       })
-      .catch((err) => {
+      .catch(async (err) => {
         const step =
           err instanceof DashboardLoadError ? err.step : 'unknown'
         const message =
@@ -68,9 +85,21 @@ export default function Dashboard() {
 
         setErrorStep(step)
         setError(message)
+        if (err instanceof DashboardLoadError) {
+          if (err.code) setErrorCode(err.code)
+          if (err.details) setErrorDetails(err.details)
+        }
+
+        try {
+          const diagnostics = await diagnoseDashboardTables()
+          console.error('[Dashboard] 表连通性诊断', diagnostics)
+          setTableDiagnostics(diagnostics)
+        } catch (diagErr) {
+          console.error('[Dashboard] 诊断失败', diagErr)
+        }
       })
       .finally(() => setLoading(false))
-  }, [ownerEmail])
+  }, [ownerEmail, reloadKey])
 
   if (loading) {
     return (
@@ -82,29 +111,132 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="page-shell">
-        <div className="alert-error space-y-2">
-          <p className="font-medium">加载失败：{error}</p>
+      <div className="page-shell space-y-4">
+        <div className="alert-error space-y-3">
+          <p className="font-medium text-base">加载失败</p>
+          <p className="text-sm">{error}</p>
           {errorStep && (
-            <p className="text-sm opacity-90">失败步骤：{errorStep}</p>
+            <p className="text-sm opacity-90">
+              <span className="font-medium">失败步骤：</span>
+              {errorStep}
+            </p>
+          )}
+          {errorCode && (
+            <p className="text-sm opacity-90">
+              <span className="font-medium">错误代码：</span>
+              {errorCode}
+            </p>
+          )}
+          {errorDetails && (
+            <p className="text-sm opacity-90">
+              <span className="font-medium">详细信息：</span>
+              {errorDetails}
+            </p>
           )}
           {errorStep === 'env' && (
             <p className="text-sm opacity-90">
-              Vercel 部署需在 Build 前配置 VITE_SUPABASE_URL 和
-              VITE_SUPABASE_ANON_KEY，然后重新 Deploy。
+              Vercel 需在 Build 前配置 VITE_SUPABASE_URL 和
+              VITE_SUPABASE_ANON_KEY，然后 Redeploy。
             </p>
           )}
           {errorStep === 'fetchInvestors' && (
             <p className="text-sm opacity-90">
-              常见原因：investors 表不存在、RLS 权限不足、或列名不匹配（需有 level /
-              budget_wan 字段）。请在 Supabase SQL Editor 运行
-              supabase/fix_permissions.sql。
+              请确认 investors 表存在且 RLS 已开放；列名需为 level、budget_wan、
+              confirmed_wan（非 grade/budget）。可运行 supabase/fix_permissions.sql。
             </p>
           )}
-          <p className="text-xs opacity-75">
-            详细错误已输出到浏览器控制台（Console → [Dashboard]）。
-          </p>
+          <Button
+            variant="secondary"
+            onClick={() => setReloadKey((k) => k + 1)}
+          >
+            重试加载
+          </Button>
         </div>
+
+        <div className="card p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-[#1B2B4B]">
+            Supabase 环境变量
+          </h3>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div>
+              <dt className="text-gray-500">VITE_SUPABASE_URL</dt>
+              <dd className="font-mono text-[#1A1A2A] break-all">
+                {envDebug.url}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-500">VITE_SUPABASE_ANON_KEY</dt>
+              <dd className="font-mono text-[#1A1A2A]">
+                {envDebug.keyPreview}（长度 {envDebug.keyLength}）
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-500">配置状态</dt>
+              <dd className={envDebug.configured ? 'text-emerald-600' : 'text-red-500'}>
+                {envDebug.configured ? '已配置' : '未配置或无效'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-500">数据范围</dt>
+              <dd className="text-[#1A1A2A]">
+                {ownerEmail ? `员工 · ${ownerEmail}` : '管理员 · 全部数据'}
+              </dd>
+            </div>
+          </dl>
+          {!envDebug.configured && envDebug.hint && (
+            <p className="text-xs text-red-500">{envDebug.hint}</p>
+          )}
+        </div>
+
+        {tableDiagnostics.length > 0 && (
+          <div className="card p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-[#1B2B4B]">
+              数据表连通性诊断
+            </h3>
+            <p className="text-xs text-gray-500">
+              仪表盘查询：investors · lands · follow_up_logs · properties ·
+              contracts
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-gray-500">
+                    <th className="py-2 pr-4">表名</th>
+                    <th className="py-2 pr-4">状态</th>
+                    <th className="py-2 pr-4">记录数</th>
+                    <th className="py-2">错误信息</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableDiagnostics.map((row) => (
+                    <tr key={row.table} className="border-b border-gray-100">
+                      <td className="py-2 pr-4 font-mono">{row.table}</td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={
+                            row.ok ? 'text-emerald-600' : 'text-red-500'
+                          }
+                        >
+                          {row.ok ? '正常' : '失败'}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">
+                        {row.ok ? row.count : '—'}
+                      </td>
+                      <td className="py-2 text-gray-600 break-all">
+                        {row.error ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-gray-400">
+          完整日志请打开 F12 → Console，搜索 [Dashboard] 或 [Supabase]。
+        </p>
       </div>
     )
   }

@@ -29,7 +29,6 @@ import {
   endOfMonth,
   format,
   isWithinInterval,
-  parseISO,
   startOfMonth,
   subMonths,
 } from 'date-fns'
@@ -119,22 +118,38 @@ export async function fetchInvestors(
   grade?: InvestorGrade | 'all',
   ownerEmail?: string | null,
 ) {
-  let query = supabase
-    .from('investors')
-    .select('*')
-    .order('updated_at', { ascending: false })
-
-  if (grade && grade !== 'all') {
-    query = query.eq(GRADE_COLUMN, grade)
+  const runQuery = (orderColumn: 'updated_at' | 'created_at' | null) => {
+    let query = supabase.from('investors').select('*')
+    if (orderColumn) {
+      query = query.order(orderColumn, { ascending: false })
+    }
+    if (grade && grade !== 'all') {
+      query = query.eq(GRADE_COLUMN, grade)
+    }
+    if (ownerEmail) {
+      query = query.eq('owner', ownerEmail)
+    }
+    return query
   }
-  if (ownerEmail) {
-    query = query.eq('owner', ownerEmail)
+
+  let { data, error } = await runQuery('updated_at')
+
+  if (
+    error &&
+    (error.code === '42703' ||
+      error.message.includes('updated_at') ||
+      error.message.includes('does not exist'))
+  ) {
+    ;({ data, error } = await runQuery('created_at'))
   }
 
-  const { data, error } = await query
+  if (error) {
+    ;({ data, error } = await runQuery(null))
+  }
+
   if (error) {
     throw new Error(
-      `investors 查询失败：${error.message}${error.code ? ` (${error.code})` : ''}`,
+      `investors 表查询失败：${error.message}${error.code ? ` (${error.code})` : ''}${error.details ? ` · ${error.details}` : ''}`,
     )
   }
   return ((data ?? []) as InvestorRow[]).map(mapInvestorFromRow)
@@ -616,27 +631,32 @@ export function formatCurrency(value: number) {
 
 export function formatDateTime(value: string | null) {
   if (!value) return '从未联系'
+  const date = safeParseISO(value)
+  if (!date) return '从未联系'
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(parseISO(value))
+  }).format(date)
 }
 
 export function formatDate(value: string | null) {
   if (!value) return '—'
+  const date = safeParseISO(value)
+  if (!date) return '—'
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  }).format(parseISO(value))
+  }).format(date)
 }
 
 export function daysSinceContact(value: string | null) {
-  if (!value) return null
-  return differenceInDays(new Date(), parseISO(value))
+  const date = safeParseISO(value)
+  if (!date) return null
+  return differenceInDays(new Date(), date)
 }
 
 export function isOverdueContact(value: string | null, afterSalesMode = false) {

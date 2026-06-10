@@ -84,16 +84,28 @@ function mapLandUpdate(payload: LandUpdate): Record<string, unknown> {
 }
 
 export async function fetchLands(ownerEmail?: string | null) {
-  let query = supabase
-    .from('lands')
-    .select('*')
-    .order('updated_at', { ascending: false })
-
-  if (ownerEmail) {
-    query = query.eq('owner', ownerEmail)
+  const runQuery = (orderColumn: 'updated_at' | 'created_at' | null) => {
+    let query = supabase.from('lands').select('*')
+    if (orderColumn) {
+      query = query.order(orderColumn, { ascending: false })
+    }
+    if (ownerEmail) {
+      query = query.eq('owner', ownerEmail)
+    }
+    return query
   }
 
-  const { data, error } = await query
+  let { data, error } = await runQuery('updated_at')
+  if (
+    error &&
+    (error.code === '42703' || error.message.includes('updated_at'))
+  ) {
+    ;({ data, error } = await runQuery('created_at'))
+  }
+  if (error) {
+    ;({ data, error } = await runQuery(null))
+  }
+
   if (error) throw error
   return ((data ?? []) as Land[]).map(normalizeLand)
 }

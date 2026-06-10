@@ -32,6 +32,9 @@ export function formatSupabaseError(error: unknown, context?: string): string {
 export class DashboardLoadError extends Error {
   step: string
   causeDetail: string
+  code?: string
+  details?: string
+  hint?: string
 
   constructor(step: string, cause: unknown) {
     const detail = formatSupabaseError(cause, step)
@@ -39,5 +42,11 @@ export class DashboardLoadError extends Error {
     this.name = 'DashboardLoadError'
     this.step = step
     this.causeDetail = detail
+
+    if (isPostgrestError(cause)) {
+      this.code = cause.code
+      this.details = cause.details ?? undefined
+      this.hint = cause.hint ?? undefined
+    }
   }
 }
