@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { appConfig } from '@/config/app'
+import { getSupabaseConfigHint, isSupabaseConfigured } from '@/lib/supabase'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 
 export default function Login() {
-  const { signIn, user, loading } = useAuth()
+  const { signIn, signInAsGuest, user, loading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from =
@@ -30,7 +31,16 @@ export default function Login() {
       await signIn(email, password)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败，请检查邮箱和密码')
+      const message = err instanceof Error ? err.message : '登录失败，请检查邮箱和密码'
+      if (message === 'Failed to fetch') {
+        setError(
+          isSupabaseConfigured()
+            ? '无法连接 Supabase 服务器。请检查网络，或在 Supabase → Authentication → URL Configuration 添加站点地址：https://wh19951212-blip.github.io/simon-system/'
+            : (getSupabaseConfigHint() ?? 'Supabase 未配置，请联系管理员重新部署'),
+        )
+      } else {
+        setError(message)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -81,6 +91,30 @@ export default function Login() {
                   {submitting ? '登录中...' : '登录'}
                 </Button>
               </form>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-2 text-gray-400">或</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => {
+                  signInAsGuest()
+                  navigate(from, { replace: true })
+                }}
+              >
+                一键进入（无需账号）
+              </Button>
+              <p className="text-xs text-gray-400 text-center mt-3">
+                首次用邮箱登录会自动注册账号
+              </p>
             </div>
           </div>
         </div>

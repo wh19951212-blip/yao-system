@@ -34,6 +34,9 @@ import MediaForm from '@/pages/media/MediaForm'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import { appConfig } from '@/config/app'
 
+const routerBasename =
+  import.meta.env.BASE_URL.replace(/\/$/, '') || undefined
+
 function App() {
   useEffect(() => {
     document.title = appConfig.name
@@ -44,7 +47,7 @@ function App() {
       <SettingsProvider>
         <ToastProvider>
           <ConfirmProvider>
-            <BrowserRouter>
+            <BrowserRouter basename={routerBasename}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<AppShell />}>

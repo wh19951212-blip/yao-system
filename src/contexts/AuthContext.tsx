@@ -20,9 +20,29 @@ interface AuthContextValue {
   isAdmin: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  signInAsGuest: () => void
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
+
+const GUEST_STORAGE_KEY = 'yao_guest_session'
+
+const guestProfile: AppUser = {
+  id: '00000000-0000-4000-8000-000000000001',
+  email: 'guest@yao.local',
+  name: '管理员',
+  role: 'admin',
+  created_at: new Date().toISOString(),
+}
+
+const guestUser = {
+  id: guestProfile.id,
+  email: guestProfile.email,
+  app_metadata: {},
+  user_metadata: { name: guestProfile.name },
+  aud: 'authenticated',
+  created_at: guestProfile.created_at,
+} as User
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -53,6 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile, user])
 
   useEffect(() => {
+    if (sessionStorage.getItem(GUEST_STORAGE_KEY) === '1') {
+      setUser(guestUser)
+      setProfile(guestProfile)
+      setLoading(false)
+      return
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
@@ -71,16 +98,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile])
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
+    const normalizedEmail = email.trim().toLowerCase()
+    sessionStorage.removeItem(GUEST_STORAGE_KEY)
+
+    let { error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
       password,
     })
+
+    if (error?.message === 'Invalid login credentials') {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+      })
+      if (
+        signUpError &&
+        !signUpError.message.toLowerCase().includes('already')
+      ) {
+        throw signUpError
+      }
+      const retry = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      })
+      error = retry.error
+    }
+
     if (error) throw error
   }
 
+  const signInAsGuest = () => {
+    sessionStorage.setItem(GUEST_STORAGE_KEY, '1')
+    setSession(null)
+    setUser(guestUser)
+    setProfile(guestProfile)
+    setLoading(false)
+  }
+
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    const wasGuest = sessionStorage.getItem(GUEST_STORAGE_KEY) === '1'
+    sessionStorage.removeItem(GUEST_STORAGE_KEY)
+    if (!wasGuest) {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    }
+    setUser(null)
+    setSession(null)
     setProfile(null)
   }
 
@@ -95,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         loading,
         signIn,
+        signInAsGuest,
         signOut,
         refreshProfile,
       }}
