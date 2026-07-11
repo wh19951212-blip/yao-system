@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import PageHeader from '@/components/ui/PageHeader'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Button from '@/components/ui/Button'
-import { supabase, getSupabaseEnvDebug } from '@/lib/supabase'
+import { getSupabaseEnvDebug, withSupabaseFallback } from '@/lib/supabase'
 
 type QueryError = {
   message: string
@@ -26,29 +26,31 @@ export default function Dashboard() {
       setInvestorCount(0)
 
       try {
-        const { data: investors, error } = await supabase
-          .from('investors')
-          .select('*')
+        const result = await withSupabaseFallback(async (client) => {
+          const { count, error } = await client
+            .from('investors')
+            .select('id', { count: 'exact', head: true })
+
+          return { data: count ?? 0, error }
+        })
 
         if (cancelled) return
-
-        if (error) {
-          console.error('[Dashboard] investors 查询失败', error)
-          setQueryError(error)
-          return
-        }
 
         console.info('[Dashboard] investors 查询成功', {
-          count: investors?.length ?? 0,
-          supabaseUrl: getSupabaseEnvDebug().url,
+          count: result,
+          supabase: getSupabaseEnvDebug(),
         })
-        setInvestorCount(investors?.length ?? 0)
+        setInvestorCount(result)
       } catch (err) {
         if (cancelled) return
-        console.error('[Dashboard] 查询异常', err)
-        setQueryError({
-          message: err instanceof Error ? err.message : String(err),
-        })
+        console.error('[Dashboard] 查询失败', err)
+        if (err && typeof err === 'object' && 'message' in err) {
+          setQueryError(err as QueryError)
+        } else {
+          setQueryError({
+            message: err instanceof Error ? err.message : String(err),
+          })
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -98,7 +100,7 @@ export default function Dashboard() {
         <div className="card-body">
           <p className="stat-label">投资人总数</p>
           <p className="stat-value text-[#1B2B4B] mt-2">{investorCount}</p>
-          <p className="text-sm text-gray-500 mt-2">来自 investors 表 · select *</p>
+          <p className="text-sm text-gray-500 mt-2">来自 investors 表 · count</p>
         </div>
       </div>
     </div>

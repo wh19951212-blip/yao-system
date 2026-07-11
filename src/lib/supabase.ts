@@ -1,12 +1,14 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? ''
 const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ''
 
 const PLACEHOLDER_URL = 'https://placeholder.supabase.co'
-const DEFAULT_PROXY_URL = 'https://simon-system.vercel.app/api/supabase'
+export const SUPABASE_PROXY_URL =
+  import.meta.env.VITE_SUPABASE_PROXY_URL?.trim() ||
+  'https://simon-system.vercel.app/api/supabase'
 
-/** 生产环境优先走同源/代理，避免 GitHub Pages 直连 supabase.co 被网络拦截 */
+/** 直连 Supabase（Auth / REST 默认走此地址） */
 export function resolveSupabaseUrl(): string {
   if (import.meta.env.DEV) {
     return envSupabaseUrl || PLACEHOLDER_URL
@@ -14,19 +16,19 @@ export function resolveSupabaseUrl(): string {
 
   if (typeof window !== 'undefined') {
     const { hostname, origin } = window.location
-
     if (hostname.endsWith('.vercel.app')) {
       return `${origin}/api/supabase`
-    }
-
-    if (hostname.endsWith('github.io')) {
-      const proxy =
-        import.meta.env.VITE_SUPABASE_PROXY_URL?.trim() || DEFAULT_PROXY_URL
-      return proxy.replace(/\/$/, '')
     }
   }
 
   return envSupabaseUrl || PLACEHOLDER_URL
+}
+
+export function createSupabaseClient(url?: string): SupabaseClient {
+  return createClient(
+    (url ?? resolveSupabaseUrl()).replace(/\/$/, ''),
+    supabaseAnonKey || 'placeholder-key',
+  )
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -57,23 +59,55 @@ function maskKey(key: string): string {
   return `${key.slice(0, 8)}…${key.slice(-4)}`
 }
 
-/** 供仪表盘错误页展示的环境诊断信息 */
 export function getSupabaseEnvDebug() {
   const url = resolveSupabaseUrl()
   return {
     url,
+    proxyUrl: SUPABASE_PROXY_URL,
     keyPreview: maskKey(supabaseAnonKey),
     keyLength: supabaseAnonKey.length,
     configured: isSupabaseConfigured(),
     hint: getSupabaseConfigHint(),
     isPublishableKey: supabaseAnonKey.startsWith('sb_publishable_'),
-    usesProxy: url.includes('/api/supabase'),
   }
+}
+
+function isNetworkError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' &&
+          error !== null &&
+          'message' in error
+        ? String((error as { message: unknown }).message)
+        : String(error)
+  return /failed to fetch|network|load failed|networkerror/i.test(message)
+}
+
+/** 直连失败时自动尝试 Vercel 代理 */
+export async function withSupabaseFallback<T>(
+  operation: (client: SupabaseClient) => Promise<{
+    data: T | null
+    error: unknown
+  }>,
+): Promise<T> {
+  const direct = createSupabaseClient()
+  const first = await operation(direct)
+  if (!first.error) return first.data as T
+
+  if (!isNetworkError(first.error)) throw first.error
+
+  console.warn('[Supabase] 直连失败，尝试代理', SUPABASE_PROXY_URL)
+  const proxy = createSupabaseClient(SUPABASE_PROXY_URL)
+  const second = await operation(proxy)
+  if (second.error) throw second.error
+  return second.data as T
 }
 
 if (import.meta.env.DEV || import.meta.env.PROD) {
   const url = resolveSupabaseUrl()
   console.log('[Supabase] URL =', url || '(空)')
+  console.log('[Supabase] PROXY =', SUPABASE_PROXY_URL)
   console.log(
     '[Supabase] ANON_KEY =',
     maskKey(supabaseAnonKey),
@@ -89,7 +123,4 @@ if (!isSupabaseConfigured()) {
   )
 }
 
-export const supabase = createClient(
-  resolveSupabaseUrl(),
-  supabaseAnonKey || 'placeholder-key',
-)
+export const supabase = createSupabaseClient()
