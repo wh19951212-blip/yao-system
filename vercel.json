@@ -1,5 +1,28 @@
 {
+  "headers": [
+    {
+      "source": "/api/supabase/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept, accept-profile, prefer, range, content-profile"
+        }
+      ]
+    }
+  ],
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/supabase/:path*",
+      "destination": "https://eldmhacdbisslcyrvxqt.supabase.co/:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
