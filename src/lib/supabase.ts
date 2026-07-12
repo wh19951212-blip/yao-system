@@ -8,16 +8,16 @@ export const SUPABASE_PROXY_URL =
   import.meta.env.VITE_SUPABASE_PROXY_URL?.trim() ||
   'https://simon-system.vercel.app/api/supabase'
 
-/** 直连 Supabase（Auth / REST 默认走此地址） */
+/** 直连 Supabase；仅 GitHub Pages 走 Vercel 代理 */
 export function resolveSupabaseUrl(): string {
   if (import.meta.env.DEV) {
     return envSupabaseUrl || PLACEHOLDER_URL
   }
 
   if (typeof window !== 'undefined') {
-    const { hostname, origin } = window.location
-    if (hostname.endsWith('.vercel.app')) {
-      return `${origin}/api/supabase`
+    const { hostname } = window.location
+    if (hostname.endsWith('github.io')) {
+      return SUPABASE_PROXY_URL.replace(/\/$/, '')
     }
   }
 

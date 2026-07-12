@@ -7,7 +7,10 @@ export default defineConfig(({ mode }) => {
   const anthropicKey =
     env.VITE_ANTHROPIC_API_KEY || env.ANTHROPIC_API_KEY || ''
 
+  const githubPages = Boolean(process.env.GITHUB_PAGES)
+
   return {
+    base: githubPages ? '/simon-system/' : '/',
     plugins: [react()],
     resolve: {
       alias: {
