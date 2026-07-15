@@ -53,7 +53,10 @@ export default function Dashboard() {
                 message: err instanceof Error ? err.message : String(err),
               }
 
-        if (!normalized.message?.trim()) {
+        if (/failed to fetch/i.test(normalized.message)) {
+          normalized.message =
+            'Supabase 数据库无法连接。当前配置的项目地址可能已失效，请在 Supabase 控制台新建/恢复项目，并提供新的 URL 与 anon key 以更新部署。'
+        } else if (!normalized.message?.trim()) {
           normalized.message =
             '无法连接 Supabase 数据库（项目可能已暂停或地址无效）'
         }
@@ -91,7 +94,12 @@ export default function Dashboard() {
       {offlineMode && queryError && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
           <p className="font-medium text-amber-900">
-            数据库暂不可用，已显示占位数据。前端与部署均正常，待 Supabase 恢复后会自动同步真实数据。
+            数据库暂不可用，已显示占位数据。网站部署正常，需恢复 Supabase 后才能加载真实投资人数据。
+          </p>
+          <p className="text-sm text-amber-800">
+            请先强制刷新页面（Mac：Cmd+Shift+R）。若仍失败，说明 Supabase 项目
+            <code className="mx-1 px-1 rounded bg-white/80">{getSupabaseEnvDebug().envUrl}</code>
+            已失效，需要新建项目并更新配置。
           </p>
           <pre className="text-xs overflow-auto whitespace-pre-wrap break-all bg-white/70 p-3 rounded-lg border border-amber-100">
             {JSON.stringify(

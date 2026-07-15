@@ -74,6 +74,7 @@ export function getSupabaseEnvDebug() {
   const url = resolveSupabaseUrl()
   return {
     url,
+    envUrl: envSupabaseUrl || '(未配置)',
     proxyUrl: productionProxyUrl(),
     keyPreview: maskKey(supabaseAnonKey),
     keyLength: supabaseAnonKey.length,
