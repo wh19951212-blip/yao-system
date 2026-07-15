@@ -8,17 +8,24 @@ export const SUPABASE_PROXY_URL =
   import.meta.env.VITE_SUPABASE_PROXY_URL?.trim() ||
   'https://simon-system.vercel.app/api/supabase'
 
-/** 直连 Supabase；仅 GitHub Pages 走 Vercel 代理 */
+function productionProxyUrl(): string {
+  if (typeof window === 'undefined') return SUPABASE_PROXY_URL
+
+  const { hostname, origin } = window.location
+  if (hostname.endsWith('.vercel.app')) {
+    return `${origin}/api/supabase`
+  }
+  return SUPABASE_PROXY_URL
+}
+
+/** 生产环境统一走 Vercel Edge 代理，避免浏览器直连 supabase.co 被拦截 */
 export function resolveSupabaseUrl(): string {
   if (import.meta.env.DEV) {
     return envSupabaseUrl || PLACEHOLDER_URL
   }
 
   if (typeof window !== 'undefined') {
-    const { hostname } = window.location
-    if (hostname.endsWith('github.io')) {
-      return SUPABASE_PROXY_URL.replace(/\/$/, '')
-    }
+    return productionProxyUrl().replace(/\/$/, '')
   }
 
   return envSupabaseUrl || PLACEHOLDER_URL
@@ -32,23 +39,24 @@ export function createSupabaseClient(url?: string): SupabaseClient {
 }
 
 export function isSupabaseConfigured(): boolean {
-  const url = resolveSupabaseUrl()
   return Boolean(
-    url &&
-      supabaseAnonKey &&
-      url !== PLACEHOLDER_URL &&
-      !url.includes('your-project-id') &&
-      !supabaseAnonKey.includes('your-supabase-anon-key'),
+    supabaseAnonKey &&
+      !supabaseAnonKey.includes('your-supabase-anon-key') &&
+      (import.meta.env.DEV
+        ? envSupabaseUrl && !envSupabaseUrl.includes('your-project-id')
+        : true),
   )
 }
 
 export function getSupabaseConfigHint(): string | null {
-  const url = resolveSupabaseUrl()
-  if (!url || url.includes('your-project-id')) {
-    return '缺少 VITE_SUPABASE_URL。请在 .env 或 Vercel 环境变量中配置，并重新构建部署。'
-  }
   if (!supabaseAnonKey || supabaseAnonKey.includes('your-supabase-anon-key')) {
     return '缺少 VITE_SUPABASE_ANON_KEY。请在 .env 或 Vercel 环境变量中配置，并重新构建部署。'
+  }
+  if (
+    import.meta.env.DEV &&
+    (!envSupabaseUrl || envSupabaseUrl.includes('your-project-id'))
+  ) {
+    return '缺少 VITE_SUPABASE_URL。请在 .env 中配置。'
   }
   return null
 }
@@ -63,7 +71,7 @@ export function getSupabaseEnvDebug() {
   const url = resolveSupabaseUrl()
   return {
     url,
-    proxyUrl: SUPABASE_PROXY_URL,
+    proxyUrl: productionProxyUrl(),
     keyPreview: maskKey(supabaseAnonKey),
     keyLength: supabaseAnonKey.length,
     configured: isSupabaseConfigured(),
@@ -72,7 +80,8 @@ export function getSupabaseEnvDebug() {
   }
 }
 
-function isNetworkError(error: unknown): boolean {
+function shouldRetryWithDirect(error: unknown): boolean {
+  if (import.meta.env.DEV) return false
   const message =
     error instanceof Error
       ? error.message
@@ -81,33 +90,34 @@ function isNetworkError(error: unknown): boolean {
           'message' in error
         ? String((error as { message: unknown }).message)
         : String(error)
-  return /failed to fetch|network|load failed|networkerror/i.test(message)
+  return /502|503|504|proxy|fetch/i.test(message)
 }
 
-/** 直连失败时自动尝试 Vercel 代理 */
+/** 生产环境优先代理；代理异常时回退直连 */
 export async function withSupabaseFallback<T>(
   operation: (client: SupabaseClient) => Promise<{
     data: T | null
     error: unknown
   }>,
 ): Promise<T> {
-  const direct = createSupabaseClient()
-  const first = await operation(direct)
+  const primary = createSupabaseClient()
+  const first = await operation(primary)
   if (!first.error) return first.data as T
 
-  if (!isNetworkError(first.error)) throw first.error
+  if (import.meta.env.DEV || !shouldRetryWithDirect(first.error)) {
+    throw first.error
+  }
 
-  console.warn('[Supabase] 直连失败，尝试代理', SUPABASE_PROXY_URL)
-  const proxy = createSupabaseClient(SUPABASE_PROXY_URL)
-  const second = await operation(proxy)
+  console.warn('[Supabase] 代理失败，尝试直连', envSupabaseUrl)
+  const direct = createSupabaseClient(envSupabaseUrl)
+  const second = await operation(direct)
   if (second.error) throw second.error
   return second.data as T
 }
 
 if (import.meta.env.DEV || import.meta.env.PROD) {
-  const url = resolveSupabaseUrl()
-  console.log('[Supabase] URL =', url || '(空)')
-  console.log('[Supabase] PROXY =', SUPABASE_PROXY_URL)
+  console.log('[Supabase] URL =', resolveSupabaseUrl() || '(空)')
+  console.log('[Supabase] PROXY =', productionProxyUrl())
   console.log(
     '[Supabase] ANON_KEY =',
     maskKey(supabaseAnonKey),
