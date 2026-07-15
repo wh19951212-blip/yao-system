@@ -23,7 +23,8 @@ import { INVESTOR_GRADES, INVESTOR_STAGES, AFTER_SALES_REMINDER_DAYS, type Inves
 import { getAppSettings } from '@/services/settings'
 import { DashboardLoadError } from '@/utils/supabaseError'
 import { safeParseISO } from '@/utils/safeDate'
-import { isSupabaseConfigured, getSupabaseConfigHint } from '@/lib/supabase'
+import { isSupabaseConfigured, getSupabaseConfigHint, withSupabaseFallback } from '@/lib/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   differenceInDays,
   endOfMonth,
@@ -118,8 +119,11 @@ export async function fetchInvestors(
   grade?: InvestorGrade | 'all',
   ownerEmail?: string | null,
 ) {
-  const runQuery = (orderColumn: 'updated_at' | 'created_at' | null) => {
-    let query = supabase.from('investors').select('*')
+  const runQuery = (
+    client: SupabaseClient,
+    orderColumn: 'updated_at' | 'created_at' | null,
+  ) => {
+    let query = client.from('investors').select('*')
     if (orderColumn) {
       query = query.order(orderColumn, { ascending: false })
     }
@@ -132,27 +136,48 @@ export async function fetchInvestors(
     return query
   }
 
-  let { data, error } = await runQuery('updated_at')
+  try {
+    return await withSupabaseFallback(async (client) => {
+      let { data, error } = await runQuery(client, 'updated_at')
 
-  if (
-    error &&
-    (error.code === '42703' ||
-      error.message.includes('updated_at') ||
-      error.message.includes('does not exist'))
-  ) {
-    ;({ data, error } = await runQuery('created_at'))
-  }
+      if (
+        error &&
+        (error.code === '42703' ||
+          error.message.includes('updated_at') ||
+          error.message.includes('does not exist'))
+      ) {
+        ;({ data, error } = await runQuery(client, 'created_at'))
+      }
 
-  if (error) {
-    ;({ data, error } = await runQuery(null))
-  }
+      if (error) {
+        ;({ data, error } = await runQuery(client, null))
+      }
 
-  if (error) {
-    throw new Error(
-      `investors 表查询失败：${error.message}${error.code ? ` (${error.code})` : ''}${error.details ? ` · ${error.details}` : ''}`,
-    )
+      if (error) {
+        return { data: null, error }
+      }
+
+      return {
+        data: ((data ?? []) as InvestorRow[]).map(mapInvestorFromRow),
+        error: null,
+      }
+    })
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : String(err)
+    if (/failed to fetch/i.test(message)) {
+      throw new Error(
+        '无法连接 Supabase 数据库。请检查网络，或确认 Supabase 项目是否有效并已配置到 Vercel 环境变量。',
+      )
+    }
+    if (typeof err === 'object' && err !== null && 'message' in err) {
+      const e = err as { message: string; code?: string; details?: string }
+      throw new Error(
+        `investors 表查询失败：${e.message}${e.code ? ` (${e.code})` : ''}${e.details ? ` · ${e.details}` : ''}`,
+      )
+    }
+    throw err
   }
-  return ((data ?? []) as InvestorRow[]).map(mapInvestorFromRow)
 }
 
 export async function fetchInvestorById(id: string) {

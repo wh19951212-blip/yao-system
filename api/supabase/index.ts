@@ -14,6 +14,19 @@ function applyCors(res: VercelResponse) {
   res.setHeader('Access-Control-Max-Age', '86400')
 }
 
+function extractSupabasePath(req: VercelRequest): string {
+  const raw = req.url ?? '/'
+  const pathname = raw.split('?')[0] ?? '/'
+  const prefix = '/api/supabase/'
+  if (pathname.startsWith(prefix)) {
+    return pathname.slice(prefix.length)
+  }
+  if (pathname === '/api/supabase') {
+    return ''
+  }
+  return ''
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   applyCors(res)
 
@@ -21,13 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end()
   }
 
-  const segments = req.query.path
-  const path = Array.isArray(segments)
-    ? segments.join('/')
-    : typeof segments === 'string'
-      ? segments
-      : ''
-
+  const path = extractSupabasePath(req)
   const queryIndex = req.url?.indexOf('?') ?? -1
   const query = queryIndex >= 0 ? req.url!.slice(queryIndex) : ''
   const target = `${SUPABASE_ORIGIN.replace(/\/$/, '')}/${path}${query}`

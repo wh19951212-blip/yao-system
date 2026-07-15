@@ -10,10 +10,15 @@ export const SUPABASE_PROXY_URL =
 
 function productionProxyUrl(): string {
   if (typeof window === 'undefined') return SUPABASE_PROXY_URL
+
+  const { hostname, origin } = window.location
+  if (hostname.endsWith('.vercel.app')) {
+    return `${origin}/api/supabase`
+  }
   return SUPABASE_PROXY_URL.replace(/\/$/, '')
 }
 
-/** Vercel 直连 Supabase；GitHub Pages 走 Vercel 代理 */
+/** 生产环境优先走同源代理，GitHub Pages 走 Vercel 代理 */
 export function resolveSupabaseUrl(): string {
   if (import.meta.env.DEV) {
     return envSupabaseUrl || PLACEHOLDER_URL
@@ -21,7 +26,7 @@ export function resolveSupabaseUrl(): string {
 
   if (typeof window !== 'undefined') {
     const { hostname } = window.location
-    if (hostname.endsWith('github.io')) {
+    if (hostname.endsWith('.vercel.app') || hostname.endsWith('github.io')) {
       return productionProxyUrl()
     }
   }
@@ -91,7 +96,7 @@ function shouldRetryWithDirect(error: unknown): boolean {
   return /404|502|503|504|proxy|fetch|network|failed|not found/i.test(message)
 }
 
-/** 生产环境优先代理；代理异常时回退直连 */
+/** 生产环境优先代理；失败时回退直连 */
 export async function withSupabaseFallback<T>(
   operation: (client: SupabaseClient) => Promise<{
     data: T | null
@@ -103,6 +108,10 @@ export async function withSupabaseFallback<T>(
   if (!first.error) return first.data as T
 
   if (import.meta.env.DEV || !shouldRetryWithDirect(first.error)) {
+    throw first.error
+  }
+
+  if (resolveSupabaseUrl() === envSupabaseUrl) {
     throw first.error
   }
 
