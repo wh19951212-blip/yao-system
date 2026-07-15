@@ -1,55 +1,67 @@
-export const config = { runtime: 'edge' }
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 const SUPABASE_ORIGIN =
+  process.env.VITE_SUPABASE_URL?.trim() ||
   'https://eldmhacdbisslcyrvxqt.supabase.co'
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers':
-    'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept, accept-profile, prefer, range, content-profile',
+const ALLOW_HEADERS =
+  'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept, accept-profile, prefer, range, content-profile'
+
+function applyCors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', ALLOW_HEADERS)
+  res.setHeader('Access-Control-Max-Age', '86400')
 }
 
-export default async function handler(request: Request) {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS })
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  applyCors(res)
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end()
   }
 
-  const url = new URL(request.url)
-  const prefix = '/api/supabase/'
-  const path = url.pathname.startsWith(prefix)
-    ? url.pathname.slice(prefix.length)
-    : ''
-  const target = `${SUPABASE_ORIGIN}/${path}${url.search}`
+  const segments = req.query.path
+  const path = Array.isArray(segments)
+    ? segments.join('/')
+    : typeof segments === 'string'
+      ? segments
+      : ''
 
-  const headers = new Headers(request.headers)
-  headers.delete('host')
+  const queryIndex = req.url?.indexOf('?') ?? -1
+  const query = queryIndex >= 0 ? req.url!.slice(queryIndex) : ''
+  const target = `${SUPABASE_ORIGIN.replace(/\/$/, '')}/${path}${query}`
+
+  const headers = new Headers()
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (!value || key.toLowerCase() === 'host') continue
+    headers.set(key, Array.isArray(value) ? value.join(', ') : value)
+  }
 
   try {
     const upstream = await fetch(target, {
-      method: request.method,
+      method: req.method,
       headers,
       body:
-        request.method !== 'GET' && request.method !== 'HEAD'
-          ? request.body
+        req.method !== 'GET' && req.method !== 'HEAD'
+          ? (req as unknown as { body?: BodyInit }).body
           : undefined,
     })
 
-    const outHeaders = new Headers(upstream.headers)
-    Object.entries(CORS_HEADERS).forEach(([key, value]) => {
-      outHeaders.set(key, value)
+    res.status(upstream.status)
+    upstream.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'content-encoding') return
+      res.setHeader(key, value)
     })
+    applyCors(res)
 
-    return new Response(upstream.body, {
-      status: upstream.status,
-      headers: outHeaders,
-    })
+    const buffer = Buffer.from(await upstream.arrayBuffer())
+    return res.send(buffer)
   } catch (error) {
-    return Response.json(
-      {
-        message: error instanceof Error ? error.message : 'Supabase proxy failed',
-      },
-      { status: 502, headers: CORS_HEADERS },
-    )
+    applyCors(res)
+    return res.status(502).json({
+      message: error instanceof Error ? error.message : 'Supabase proxy failed',
+      target,
+    })
   }
 }
