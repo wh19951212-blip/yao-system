@@ -10,22 +10,20 @@ export const SUPABASE_PROXY_URL =
 
 function productionProxyUrl(): string {
   if (typeof window === 'undefined') return SUPABASE_PROXY_URL
-
-  const { hostname, origin } = window.location
-  if (hostname.endsWith('.vercel.app')) {
-    return `${origin}/api/supabase`
-  }
-  return SUPABASE_PROXY_URL
+  return SUPABASE_PROXY_URL.replace(/\/$/, '')
 }
 
-/** 生产环境统一走 Vercel Edge 代理，避免浏览器直连 supabase.co 被拦截 */
+/** Vercel 直连 Supabase；GitHub Pages 走 Vercel 代理 */
 export function resolveSupabaseUrl(): string {
   if (import.meta.env.DEV) {
     return envSupabaseUrl || PLACEHOLDER_URL
   }
 
   if (typeof window !== 'undefined') {
-    return productionProxyUrl().replace(/\/$/, '')
+    const { hostname } = window.location
+    if (hostname.endsWith('github.io')) {
+      return productionProxyUrl()
+    }
   }
 
   return envSupabaseUrl || PLACEHOLDER_URL
@@ -90,7 +88,7 @@ function shouldRetryWithDirect(error: unknown): boolean {
           'message' in error
         ? String((error as { message: unknown }).message)
         : String(error)
-  return /502|503|504|proxy|fetch/i.test(message)
+  return /404|502|503|504|proxy|fetch|network|failed|not found/i.test(message)
 }
 
 /** 生产环境优先代理；代理异常时回退直连 */

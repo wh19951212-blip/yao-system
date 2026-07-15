@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [investorCount, setInvestorCount] = useState(0)
   const [queryError, setQueryError] = useState<QueryError | null>(null)
+  const [offlineMode, setOfflineMode] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function Dashboard() {
     async function load() {
       setLoading(true)
       setQueryError(null)
+      setOfflineMode(false)
       setInvestorCount(0)
 
       try {
@@ -44,13 +46,21 @@ export default function Dashboard() {
       } catch (err) {
         if (cancelled) return
         console.error('[Dashboard] 查询失败', err)
-        if (err && typeof err === 'object' && 'message' in err) {
-          setQueryError(err as QueryError)
-        } else {
-          setQueryError({
-            message: err instanceof Error ? err.message : String(err),
-          })
+        const normalized: QueryError =
+          err && typeof err === 'object' && 'message' in err
+            ? (err as QueryError)
+            : {
+                message: err instanceof Error ? err.message : String(err),
+              }
+
+        if (!normalized.message?.trim()) {
+          normalized.message =
+            '无法连接 Supabase 数据库（项目可能已暂停或地址无效）'
         }
+
+        setOfflineMode(true)
+        setInvestorCount(0)
+        setQueryError(normalized)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -71,13 +81,19 @@ export default function Dashboard() {
     )
   }
 
-  if (queryError) {
-    return (
-      <div className="page-shell space-y-4">
-        <PageHeader title="仪表盘" description="加载失败" />
-        <div className="alert-error space-y-3">
-          <p className="font-medium">investors 表查询失败</p>
-          <pre className="text-xs overflow-auto whitespace-pre-wrap break-all bg-red-50 p-3 rounded-lg border border-red-200">
+  return (
+    <div className="page-shell space-y-4">
+      <PageHeader
+        title="仪表盘"
+        description={offlineMode ? '离线占位（数据库未连接）' : '投资人概览（简化版）'}
+      />
+
+      {offlineMode && queryError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <p className="font-medium text-amber-900">
+            数据库暂不可用，已显示占位数据。前端与部署均正常，待 Supabase 恢复后会自动同步真实数据。
+          </p>
+          <pre className="text-xs overflow-auto whitespace-pre-wrap break-all bg-white/70 p-3 rounded-lg border border-amber-100">
             {JSON.stringify(
               { ...queryError, supabase: getSupabaseEnvDebug() },
               null,
@@ -88,19 +104,15 @@ export default function Dashboard() {
             重试
           </Button>
         </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="page-shell">
-      <PageHeader title="仪表盘" description="投资人概览（简化版）" />
+      )}
 
       <div className="card">
         <div className="card-body">
           <p className="stat-label">投资人总数</p>
           <p className="stat-value text-[#1B2B4B] mt-2">{investorCount}</p>
-          <p className="text-sm text-gray-500 mt-2">来自 investors 表 · count</p>
+          <p className="text-sm text-gray-500 mt-2">
+            {offlineMode ? '占位数据 · 数据库未连接' : '来自 investors 表 · count'}
+          </p>
         </div>
       </div>
     </div>

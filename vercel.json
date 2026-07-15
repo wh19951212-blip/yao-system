@@ -15,14 +15,5 @@
       ]
     }
   ],
-  "rewrites": [
-    {
-      "source": "/api/supabase/:path*",
-      "destination": "https://eldmhacdbisslcyrvxqt.supabase.co/:path*"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }
