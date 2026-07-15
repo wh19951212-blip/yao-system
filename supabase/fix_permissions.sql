@@ -148,7 +148,7 @@ create policy "allow all" on investor_property_matches for all using (true) with
 create table if not exists app_settings (
   id integer primary key default 1 check (id = 1),
   company_name text default '',
-  contact_name text default 'Simon',
+  contact_name text default 'YAO',
   contact_info text default '',
   follow_up_reminder_days integer default 7,
   deadline_reminder_days integer default 3,

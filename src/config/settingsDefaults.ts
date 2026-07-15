@@ -8,10 +8,10 @@ export interface AppSettings {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   companyName: '',
-  contactName: 'Simon',
+  contactName: 'YAO',
   contactInfo: '',
   followUpReminderDays: 7,
   deadlineReminderDays: 3,
 }
 
-export const SETTINGS_STORAGE_KEY = 'simon_app_settings_v1'
+export const SETTINGS_STORAGE_KEY = 'yao_app_settings_v1'

@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   const githubPages = Boolean(process.env.GITHUB_PAGES)
 
   return {
-    base: githubPages ? '/simon-system/' : '/',
+    base: githubPages ? '/yao-system/' : '/',
     plugins: [react()],
     resolve: {
       alias: {

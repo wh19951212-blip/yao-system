@@ -4,7 +4,7 @@ import type { Investor } from '@/types/database'
 
 export function buildDealCongratulationNote(investor: Investor) {
   const { companyName } = getAppSettings()
-  const company = companyName || 'Simon Investment'
+  const company = companyName || 'YAO Investment'
 
   return `🎉 恭喜 ${investor.name} 先生/女士！
 

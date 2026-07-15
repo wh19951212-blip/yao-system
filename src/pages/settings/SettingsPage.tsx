@@ -178,7 +178,7 @@ export default function SettingsPage() {
               label="公司名称"
               value={form.companyName}
               onChange={(e) => setField('companyName', e.target.value)}
-              placeholder="如：Simon Investment"
+              placeholder="如：YAO Investment"
               disabled={!isAdmin || settingsLoading}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -187,7 +187,7 @@ export default function SettingsPage() {
                 label="联系人"
                 value={form.contactName}
                 onChange={(e) => setField('contactName', e.target.value)}
-                placeholder="Simon"
+                placeholder="YAO"
                 disabled={!isAdmin || settingsLoading}
               />
               <Input

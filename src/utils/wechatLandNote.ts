@@ -123,7 +123,7 @@ function buildInvestorNote(
     ? formatYield(result.netYieldPercent)
     : formatPercent(land.roi_percent)
   const { companyName } = getAppSettings()
-  const company = companyName || 'Simon Investment'
+  const company = companyName || 'YAO Investment'
 
   const focus =
     investor.motivation ||

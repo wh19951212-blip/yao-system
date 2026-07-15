@@ -35,7 +35,7 @@ export default function Login() {
       if (message === 'Failed to fetch') {
         setError(
           isSupabaseConfigured()
-            ? '无法连接 Supabase 服务器。请检查网络，或在 Supabase → Authentication → URL Configuration 添加站点地址：https://wh19951212-blip.github.io/simon-system/'
+            ? '无法连接 Supabase 服务器。请检查网络，或在 Supabase → Authentication → URL Configuration 添加站点地址：https://wh19951212-blip.github.io/yao-system/'
             : (getSupabaseConfigHint() ?? 'Supabase 未配置，请联系管理员重新部署'),
         )
       } else {

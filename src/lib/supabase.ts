@@ -6,7 +6,7 @@ const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ''
 const PLACEHOLDER_URL = 'https://placeholder.supabase.co'
 export const SUPABASE_PROXY_URL =
   import.meta.env.VITE_SUPABASE_PROXY_URL?.trim() ||
-  'https://simon-system.vercel.app/api/supabase'
+  'https://yao-system.vercel.app/api/supabase'
 
 function productionProxyUrl(): string {
   if (typeof window === 'undefined') return SUPABASE_PROXY_URL
