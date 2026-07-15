@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 const SUPABASE_ORIGIN =
   process.env.VITE_SUPABASE_URL?.trim() ||
-  'https://eldmhacdbisslcyrvxqt.supabase.co'
+  'https://cgbrljkucjridmyhhktc.supabase.co'
 
 const ALLOW_HEADERS =
   'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept, accept-profile, prefer, range, content-profile'
