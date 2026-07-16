@@ -19,7 +19,7 @@ import { PROPERTY_TABS, type PropertyStatus } from '@/config/app'
 import { useCanWrite } from '@/hooks/useCanWrite'
 import type { Property } from '@/types/database'
 
-export default function PropertyList() {
+export default function PropertyList({ embedded = false }: { embedded?: boolean }) {
   const { ownerEmail } = useDataScope()
   const { canWrite } = useCanWrite()
   const [properties, setProperties] = useState<Property[]>([])
@@ -53,7 +53,8 @@ export default function PropertyList() {
     usePagination(filtered, undefined, filterKey)
 
   return (
-    <div className="page-shell">
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
       <PageHeader
         title="物件管理"
         description="中介线物件上架与状态跟踪"
@@ -68,6 +69,18 @@ export default function PropertyList() {
           ) : undefined
         }
       />
+      )}
+
+      {embedded && canWrite && (
+        <div className="flex justify-end mb-4">
+          <Link to="/properties/new">
+            <Button>
+              <Plus size={16} />
+              新增物件
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mb-6">
         {PROPERTY_TABS.map((tab) => (

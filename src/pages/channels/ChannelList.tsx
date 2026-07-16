@@ -18,7 +18,7 @@ import {
 import type { Channel } from '@/types/database'
 import { CHANNEL_TIERS, type ChannelTier } from '@/config/app'
 
-export default function ChannelList() {
+export default function ChannelList({ embedded = false }: { embedded?: boolean }) {
   const { canWrite } = useCanWrite()
   const [channels, setChannels] = useState<Channel[]>([])
   const [filters, setFilters] = useListFilters('channels', {
@@ -51,7 +51,8 @@ export default function ChannelList() {
     usePagination(filtered, undefined, filterKey)
 
   return (
-    <div className="page-shell">
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
       <PageHeader
         title="渠道中介"
         description="管理合作渠道、引荐记录与佣金结算"
@@ -66,6 +67,18 @@ export default function ChannelList() {
           ) : undefined
         }
       />
+      )}
+
+      {embedded && canWrite && (
+        <div className="flex justify-end mb-4">
+          <Link to="/channels/new">
+            <Button>
+              <Plus size={16} />
+              新增渠道
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="relative flex-1 min-w-[200px] max-w-sm">

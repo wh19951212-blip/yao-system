@@ -33,6 +33,7 @@ import {
   fetchContractsByInvestor,
 } from '@/services/relations'
 import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
+import NextStepBar from '@/components/ui/NextStepBar'
 import { DEMAND_STATUS_LABELS } from '@/config/matching'
 import type { Channel, Contract, InvestorDemand } from '@/types/database'
 
@@ -89,6 +90,12 @@ export default function InvestorDetail() {
     load()
   }, [id])
 
+  useEffect(() => {
+    if (!loading && window.location.hash === '#follow-up') {
+      document.getElementById('follow-up')?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [loading])
+
   const handleAddFollowUp = async () => {
     if (!id || !newNote.trim()) {
       toast.error('请输入跟进内容')
@@ -132,7 +139,7 @@ export default function InvestorDetail() {
     return (
       <div className="page-shell">
         <div className="alert-error">{error}</div>
-        <Link to="/investors" className="link-back mt-4">
+        <Link to="/clients" className="link-back mt-4">
           ← 返回列表
         </Link>
       </div>
@@ -143,7 +150,7 @@ export default function InvestorDetail() {
     return (
       <div className="page-shell">
         <div className="alert-error">投资人不存在</div>
-        <Link to="/investors" className="link-back mt-4">
+        <Link to="/clients" className="link-back mt-4">
           ← 返回列表
         </Link>
       </div>
@@ -267,6 +274,7 @@ export default function InvestorDetail() {
           className="xl:col-span-1"
         />
 
+        <div id="follow-up">
         <FollowUpTimeline
           followUps={followUps}
           contactType={contactType}
@@ -276,6 +284,7 @@ export default function InvestorDetail() {
           onNoteChange={setNewNote}
           onSubmit={handleAddFollowUp}
         />
+        </div>
       </div>
 
       <section className="card p-6 mt-6">
@@ -332,6 +341,22 @@ export default function InvestorDetail() {
         <h2 className="section-label mb-4">阶段变化时间线</h2>
         <StageChangeTimeline logs={stageLogs} />
       </section>
+
+      <NextStepBar
+        actions={[
+          {
+            label: '创建需求单',
+            to: `/matching/demands/new?investorId=${investor.id}`,
+            variant: 'primary',
+          },
+          {
+            label: '添加跟进',
+            onClick: () =>
+              document.getElementById('follow-up')?.scrollIntoView({ behavior: 'smooth' }),
+            variant: 'secondary',
+          },
+        ]}
+      />
     </div>
   )
 }

@@ -1,27 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, Users } from 'lucide-react'
+import { AlertTriangle, Building2, Sparkles, Users } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Button from '@/components/ui/Button'
-import PoolCard from '@/components/dashboard/PoolCard'
-import DashboardStatsSection from '@/components/dashboard/DashboardStatsSection'
-import UpcomingDeadlines from '@/components/dashboard/UpcomingDeadlines'
-import BusinessLineSwitcher from '@/components/dashboard/BusinessLineSwitcher'
-import DashboardQuickNav from '@/components/dashboard/DashboardQuickNav'
-import MyTasksPanel from '@/components/dashboard/MyTasksPanel'
-import DailyTodoModal, {
-  shouldShowDailyTodo,
-} from '@/components/dashboard/DailyTodoModal'
 import { getSupabaseEnvDebug } from '@/lib/supabase'
 import { subscribeDemoData } from '@/lib/demoData'
 import { useDataScope } from '@/hooks/useDataScope'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   fetchDashboardData,
-  formatCurrency,
+  formatDateTime,
 } from '@/services/investors'
+import { fetchMyTasks, getTaskRelatedPath, updateTaskStatus } from '@/services/tasks'
 import { DashboardLoadError } from '@/utils/supabaseError'
-import type { DashboardData } from '@/types/database'
+import { useToast } from '@/contexts/ToastContext'
+import { CheckCircle2, Circle, ListTodo } from 'lucide-react'
+import type { DashboardData, Task } from '@/types/database'
 
 type QueryError = {
   message: string
@@ -32,13 +27,15 @@ type QueryError = {
 
 export default function Dashboard() {
   const { ownerEmail } = useDataScope()
+  const { profile } = useAuth()
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<DashboardData | null>(null)
+  const [tasks, setTasks] = useState<Task[]>([])
   const [queryError, setQueryError] = useState<QueryError | null>(null)
   const [offlineMode, setOfflineMode] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [usingDemo, setUsingDemo] = useState(false)
-  const [todoOpen, setTodoOpen] = useState(false)
 
   useEffect(() => subscribeDemoData(setUsingDemo), [])
 
@@ -52,12 +49,13 @@ export default function Dashboard() {
       setData(null)
 
       try {
-        const dashboard = await fetchDashboardData(ownerEmail)
+        const [dashboard, taskRows] = await Promise.all([
+          fetchDashboardData(ownerEmail),
+          fetchMyTasks(profile?.id ?? null),
+        ])
         if (cancelled) return
         setData(dashboard)
-        if (shouldShowDailyTodo()) {
-          setTodoOpen(true)
-        }
+        setTasks(taskRows.slice(0, 5))
       } catch (err) {
         if (cancelled) return
         console.error('[Dashboard] 加载失败', err)
@@ -93,12 +91,22 @@ export default function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [reloadKey, ownerEmail])
+  }, [reloadKey, ownerEmail, profile?.id])
+
+  const handleDone = async (task: Task) => {
+    try {
+      await updateTaskStatus(task.id, 'done')
+      setTasks((prev) => prev.filter((t) => t.id !== task.id))
+      toast.success('任务已完成')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '操作失败')
+    }
+  }
 
   if (loading) {
     return (
       <div className="page-shell">
-        <LoadingSpinner label="加载仪表盘..." />
+        <LoadingSpinner label="加载工作台..." />
       </div>
     )
   }
@@ -106,11 +114,11 @@ export default function Dashboard() {
   if (offlineMode || !data) {
     return (
       <div className="page-shell space-y-4">
-        <PageHeader title="仪表盘" description="数据库暂不可用" />
+        <PageHeader title="工作台" description="数据库暂不可用" />
         {queryError && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
             <p className="font-medium text-amber-900">
-              无法加载仪表盘数据。网站部署正常，需恢复 Supabase 连接。
+              无法加载数据。网站部署正常，需恢复 Supabase 连接。
             </p>
             <p className="text-sm text-amber-800">
               项目地址：
@@ -118,13 +126,6 @@ export default function Dashboard() {
                 {getSupabaseEnvDebug().envUrl}
               </code>
             </p>
-            <pre className="text-xs overflow-auto whitespace-pre-wrap break-all bg-white/70 p-3 rounded-lg border border-amber-100">
-              {JSON.stringify(
-                { ...queryError, supabase: getSupabaseEnvDebug() },
-                null,
-                2,
-              )}
-            </pre>
             <Button variant="secondary" onClick={() => setReloadKey((k) => k + 1)}>
               重试
             </Button>
@@ -139,112 +140,145 @@ export default function Dashboard() {
       <PageHeader
         title="工作台"
         description={
-          usingDemo
-            ? '业务概览 · 演示案例数据'
-            : '业务概览 · 资金池与待办'
+          usingDemo ? '今日待办与跟进提醒 · 演示数据' : '今日待办与跟进提醒'
         }
       />
 
-      <BusinessLineSwitcher />
-
-      <DashboardQuickNav />
-
-      <MyTasksPanel />
-
-      <section>
-        <h2 className="section-label mb-4">总览</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: '投资人总数', value: data.totals.investors, unit: '人' },
-            {
-              label: '总预算',
-              value: formatCurrency(data.totals.totalBudget),
-              unit: '',
-            },
-            {
-              label: '已确认',
-              value: formatCurrency(data.totals.confirmedAmount),
-              unit: '',
-            },
-            {
-              label: '确认率',
-              value: `${data.totals.confirmRate.toFixed(0)}%`,
-              unit: '',
-            },
-          ].map((item) => (
-            <div key={item.label} className="card">
-              <div className="card-body">
-                <p className="stat-label">{item.label}</p>
-                <p className="stat-value text-[#1B2B4B] mt-2">
-                  {item.value}
-                  {item.unit && (
-                    <span className="text-base font-normal text-gray-500 ml-1">
-                      {item.unit}
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+      <section className="card p-6">
+        <h2 className="section-label flex items-center gap-2 mb-4">
+          <ListTodo size={16} className="text-[#C9A84C]" />
+          今日待办
+        </h2>
+        {tasks.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">暂无待办任务</p>
+        ) : (
+          <ul className="space-y-2">
+            {tasks.map((task) => (
+              <li
+                key={task.id}
+                className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleDone(task)}
+                  className="mt-0.5 text-gray-400 hover:text-emerald-600"
+                  title="标记完成"
+                >
+                  <Circle size={18} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <Link
+                    to={getTaskRelatedPath(task)}
+                    className="text-sm font-medium text-[#1A1A2A] hover:text-[#C9A84C]"
+                  >
+                    {task.title}
+                  </Link>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDone(task)}
+                  className="text-xs text-emerald-600 hover:underline shrink-0"
+                >
+                  <CheckCircle2 size={14} className="inline mr-0.5" />
+                  完成
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="section-label">分级资金池</h2>
-          <Link
-            to="/investors"
-            className="text-sm text-[#C9A84C] hover:underline"
-          >
-            查看全部 →
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {data.pools.map((pool) => (
-            <PoolCard key={pool.grade} pool={pool} />
-          ))}
-        </div>
-      </section>
-
-      {data.overdueInvestors.length > 0 && (
-        <section>
-          <h2 className="section-label mb-4 flex items-center gap-2">
-            <AlertTriangle size={16} className="text-red-500" />
-            需要跟进 ({data.overdueInvestors.length})
-          </h2>
+      <section className="card p-6">
+        <h2 className="section-label flex items-center gap-2 mb-4">
+          <AlertTriangle size={16} className="text-red-500" />
+          需要跟进
+          {data.overdueInvestors.length > 0 && (
+            <span className="text-gray-400 font-normal text-xs">
+              （{data.overdueInvestors.length} 位 · 7 天未联系）
+            </span>
+          )}
+        </h2>
+        {data.overdueInvestors.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">所有客户跟进正常</p>
+        ) : (
           <div className="space-y-2">
             {data.overdueInvestors.slice(0, 5).map((inv) => (
-              <Link
+              <div
                 key={inv.id}
-                to={`/investors/${inv.id}`}
-                className="card block hover:border-[#C9A84C]/40 transition-colors"
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#C9A84C]/30 transition-colors"
               >
-                <div className="card-body flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Users size={16} className="text-red-500" />
-                    <span className="font-medium">{inv.name}</span>
-                    <span className="text-xs text-gray-500">{inv.stage}</span>
-                  </div>
-                  <span className="text-sm text-red-600">跟进 →</span>
+                <div className="min-w-0">
+                  <Link
+                    to={`/investors/${inv.id}`}
+                    className="font-medium text-[#1A1A2A] hover:text-[#C9A84C]"
+                  >
+                    {inv.name}
+                  </Link>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {inv.next_action || inv.stage} · 上次{' '}
+                    {formatDateTime(inv.last_contact_at)}
+                  </p>
                 </div>
-              </Link>
+                <Link to={`/investors/${inv.id}#follow-up`}>
+                  <Button variant="secondary" className="text-xs px-3 py-1.5">
+                    跟进
+                  </Button>
+                </Link>
+              </div>
             ))}
+            {data.overdueInvestors.length > 5 && (
+              <Link
+                to="/clients"
+                className="block text-center text-sm text-[#C9A84C] hover:underline pt-2"
+              >
+                查看全部 {data.overdueInvestors.length} 位 →
+              </Link>
+            )}
           </div>
-        </section>
-      )}
-
-      <section>
-        <h2 className="section-label mb-4">截止日期临近</h2>
-        <UpcomingDeadlines investors={data.upcomingDeadlineInvestors} />
+        )}
       </section>
 
-      <DashboardStatsSection stats={data.stats} />
-
-      <DailyTodoModal
-        open={todoOpen}
-        data={data}
-        onClose={() => setTodoOpen(false)}
-      />
+      <section>
+        <h2 className="section-label mb-4">快捷入口</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link
+            to="/investors/new"
+            className="card p-4 flex items-center gap-3 hover:border-[#C9A84C]/40 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#1B2B4B]/5 flex items-center justify-center">
+              <Users size={20} className="text-[#1B2B4B]" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">新建客户</p>
+              <p className="text-xs text-gray-500">投资人档案</p>
+            </div>
+          </Link>
+          <Link
+            to="/lands/new"
+            className="card p-4 flex items-center gap-3 hover:border-[#C9A84C]/40 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#1B2B4B]/5 flex items-center justify-center">
+              <Building2 size={20} className="text-[#1B2B4B]" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">新建土地</p>
+              <p className="text-xs text-gray-500">录入地块信息</p>
+            </div>
+          </Link>
+          <Link
+            to="/business"
+            className="card p-4 flex items-center gap-3 hover:border-[#C9A84C]/40 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#C9A84C]/10 flex items-center justify-center">
+              <Sparkles size={20} className="text-[#C9A84C]" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">运行匹配</p>
+              <p className="text-xs text-gray-500">需求与匹配</p>
+            </div>
+          </Link>
+        </div>
+      </section>
     </div>
   )
 }

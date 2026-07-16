@@ -29,7 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-50 text-red-500',
 }
 
-export default function DemandList() {
+export default function DemandList({ embedded = false }: { embedded?: boolean }) {
   const { canWrite } = useCanWrite()
   const { ownerEmail } = useDataScope()
   const [demands, setDemands] = useState<InvestorDemand[]>([])
@@ -66,7 +66,8 @@ export default function DemandList() {
     usePagination(filtered, undefined, filterKey)
 
   return (
-    <div className="page-shell">
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
       <PageHeader
         title="需求与匹配"
         description="从投资人发起需求，运行匹配引擎，审核推荐结果"
@@ -81,6 +82,18 @@ export default function DemandList() {
           ) : undefined
         }
       />
+      )}
+
+      {embedded && canWrite && (
+        <div className="flex justify-end mb-4">
+          <Link to="/matching/demands/new">
+            <Button>
+              <Plus size={16} />
+              新建需求单
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="relative flex-1 min-w-[200px] max-w-sm">

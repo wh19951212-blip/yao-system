@@ -29,7 +29,15 @@ import type { Buyer } from '@/types/database'
 
 type ClientTab = 'investors' | 'buyers'
 
-export default function InvestorList() {
+type InvestorListProps = {
+  embedded?: boolean
+  hubMode?: boolean
+}
+
+export default function InvestorList({
+  embedded = false,
+  hubMode = false,
+}: InvestorListProps = {}) {
   const { ownerEmail } = useDataScope()
   const { canWrite } = useCanWrite()
   const { settings } = useSettings()
@@ -97,53 +105,66 @@ export default function InvestorList() {
   const buyerPagination = usePagination(filteredBuyers, undefined, filterKey)
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        title="投资人"
-        description="开发线投资人档案 · 中介线买家客户（统一管理）"
-        actions={
-          clientTab === 'investors' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <ExportButton
-                disabled={filteredInvestors.length === 0}
-                onClick={() =>
-                  exportToExcel(
-                    `投资人列表_${new Date().toISOString().slice(0, 10)}`,
-                    [
-                      '姓名',
-                      '等级',
-                      '阶段',
-                      '预算(万)',
-                      '已确认(万)',
-                      '负责人',
-                      '来源',
-                      '最后联系',
-                    ],
-                    filteredInvestors.map((i) => [
-                      i.name,
-                      i.grade,
-                      i.stage,
-                      i.budget,
-                      i.confirmed_amount,
-                      i.owner ?? '',
-                      i.source ?? '',
-                      formatDateTime(i.last_contact_at),
-                    ]),
-                  )
-                }
-              />
-              {canWrite && (
-                <Link to="/investors/new">
-                  <Button>
-                    <Plus size={16} />
-                    新增投资人
-                  </Button>
-                </Link>
-              )}
-            </div>
-          ) : undefined
-        }
-      />
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
+        <PageHeader
+          title="客户"
+          description="投资人档案与买家客户"
+          actions={
+            clientTab === 'investors' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <ExportButton
+                  disabled={filteredInvestors.length === 0}
+                  onClick={() =>
+                    exportToExcel(
+                      `投资人列表_${new Date().toISOString().slice(0, 10)}`,
+                      [
+                        '姓名',
+                        '等级',
+                        '阶段',
+                        '预算(万)',
+                        '已确认(万)',
+                        '负责人',
+                        '来源',
+                        '最后联系',
+                      ],
+                      filteredInvestors.map((i) => [
+                        i.name,
+                        i.grade,
+                        i.stage,
+                        i.budget,
+                        i.confirmed_amount,
+                        i.owner ?? '',
+                        i.source ?? '',
+                        formatDateTime(i.last_contact_at),
+                      ]),
+                    )
+                  }
+                />
+                {canWrite && (
+                  <Link to="/investors/new">
+                    <Button>
+                      <Plus size={16} />
+                      新增投资人
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            ) : undefined
+          }
+        />
+      )}
+
+      {embedded && canWrite && clientTab === 'investors' && (
+        <div className="flex justify-end mb-4">
+          <Link to="/investors/new">
+            <Button>
+              <Plus size={16} />
+              新建客户
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="flex items-center gap-1 card p-1 mb-6 w-fit">
         {(
@@ -186,7 +207,7 @@ export default function InvestorList() {
           />
         </div>
 
-        {clientTab === 'investors' && (
+        {clientTab === 'investors' && !hubMode && (
           <div className="flex items-center gap-1 card p-1">
             {(['all', ...INVESTOR_GRADES] as const).map((g) => (
               <button
@@ -222,6 +243,7 @@ export default function InvestorList() {
           pageSize={buyerPagination.pageSize}
           onPageChange={buyerPagination.setPage}
           filteredEmpty={buyers.length > 0 && filteredBuyers.length === 0}
+          hubMode={hubMode}
         />
       ) : investors.length === 0 ? (
         <div className="card">
@@ -269,10 +291,19 @@ export default function InvestorList() {
                 <tr className="table-head">
                   <th className="text-left px-5 py-3">姓名</th>
                   <th className="text-left px-4 py-3">等级</th>
-                  <th className="text-left px-4 py-3">阶段</th>
-                  <th className="text-right px-4 py-3">预算（万）</th>
-                  <th className="text-left px-4 py-3">最后联系</th>
-                  <th className="text-right px-5 py-3">操作</th>
+                  {hubMode ? (
+                    <>
+                      <th className="text-left px-4 py-3">最近联系</th>
+                      <th className="text-left px-4 py-3">下一步</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="text-left px-4 py-3">阶段</th>
+                      <th className="text-right px-4 py-3">预算（万）</th>
+                      <th className="text-left px-4 py-3">最后联系</th>
+                    </>
+                  )}
+                  <th className="text-right px-5 py-3">{hubMode ? '操作' : '操作'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -305,36 +336,57 @@ export default function InvestorList() {
                       <td className="px-4 py-4">
                         <GradeBadge grade={investor.grade} />
                       </td>
-                      <td className="px-4 py-4 text-[#1A1A2A]">
-                        {investor.stage}
-                      </td>
-                      <td className="px-4 py-4 text-right font-medium text-[#1A1A2A]">
-                        {formatCurrency(investor.budget)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span
-                          className={
-                            overdue ? 'text-red-500' : 'text-gray-500'
-                          }
-                        >
-                          {formatDateTime(investor.last_contact_at)}
-                        </span>
-                      </td>
+                      {hubMode ? (
+                        <>
+                          <td className="px-4 py-4">
+                            <span className={overdue ? 'text-red-500' : 'text-gray-500'}>
+                              {formatDateTime(investor.last_contact_at)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-gray-600 max-w-[200px] truncate">
+                            {investor.next_action || investor.stage || '—'}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-4 text-[#1A1A2A]">
+                            {investor.stage}
+                          </td>
+                          <td className="px-4 py-4 text-right font-medium text-[#1A1A2A]">
+                            {formatCurrency(investor.budget)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={overdue ? 'text-red-500' : 'text-gray-500'}>
+                              {formatDateTime(investor.last_contact_at)}
+                            </span>
+                          </td>
+                        </>
+                      )}
                       <td className="px-5 py-4 text-right">
-                        {canWrite && (
-                          <Link
-                            to={`/investors/${investor.id}/edit`}
-                            className="text-gray-500 hover:text-[#1A1A2A] text-sm mr-3"
-                          >
-                            编辑
+                        {hubMode ? (
+                          <Link to={`/investors/${investor.id}#follow-up`}>
+                            <Button variant="secondary" className="text-xs px-3 py-1.5">
+                              跟进
+                            </Button>
                           </Link>
+                        ) : (
+                          <>
+                            {canWrite && (
+                              <Link
+                                to={`/investors/${investor.id}/edit`}
+                                className="text-gray-500 hover:text-[#1A1A2A] text-sm mr-3"
+                              >
+                                编辑
+                              </Link>
+                            )}
+                            <Link
+                              to={`/investors/${investor.id}`}
+                              className="text-[#1A1A2A] hover:text-[#C9A84C] text-sm font-medium"
+                            >
+                              详情
+                            </Link>
+                          </>
                         )}
-                        <Link
-                          to={`/investors/${investor.id}`}
-                          className="text-[#1A1A2A] hover:text-[#C9A84C] text-sm font-medium"
-                        >
-                          详情
-                        </Link>
                       </td>
                     </tr>
                   )

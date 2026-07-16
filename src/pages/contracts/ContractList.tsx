@@ -19,7 +19,7 @@ import {
 } from '@/services/contracts'
 import { exportToExcel } from '@/utils/exportExcel'
 
-export default function ContractList() {
+export default function ContractList({ embedded = false }: { embedded?: boolean }) {
   const { ownerEmail, isAdmin, isGuest } = useDataScope()
   const { canWrite } = useCanWrite()
   const [contracts, setContracts] = useState<Awaited<ReturnType<typeof fetchContracts>>>([])
@@ -48,7 +48,8 @@ export default function ContractList() {
     usePagination(contracts)
 
   return (
-    <div className="page-shell">
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
       <PageHeader
         title="合同管理"
         description="开发、中介、运营合同档案"
@@ -93,6 +94,18 @@ export default function ContractList() {
           </div>
         }
       />
+      )}
+
+      {embedded && canWrite && (
+        <div className="flex justify-end mb-4">
+          <Link to="/contracts/new">
+            <Button>
+              <Plus size={16} />
+              新增合同
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {error && <div className="alert-error mb-4">{error}</div>}
 

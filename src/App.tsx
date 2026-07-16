@@ -5,24 +5,21 @@ import { SettingsProvider } from '@/contexts/SettingsContext'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import AppShell from '@/components/layout/AppShell'
+import { LegacyClientsRedirect } from '@/components/routing/LegacyClientsRedirect'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { appConfig } from '@/config/app'
 
 const Login = lazy(() => import('@/pages/Login'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
-const InvestorList = lazy(() => import('@/pages/investors/InvestorList'))
 const InvestorDetail = lazy(() => import('@/pages/investors/InvestorDetail'))
 const InvestorForm = lazy(() => import('@/pages/investors/InvestorForm'))
-const LandList = lazy(() => import('@/pages/lands/LandList'))
 const LandForm = lazy(() => import('@/pages/lands/LandForm'))
 const LandCalculatorPage = lazy(() => import('@/pages/lands/LandCalculatorPage'))
 const LandDetail = lazy(() => import('@/pages/lands/LandDetail'))
-const PropertyList = lazy(() => import('@/pages/properties/PropertyList'))
 const PropertyDetail = lazy(() => import('@/pages/properties/PropertyDetail'))
 const PropertyForm = lazy(() => import('@/pages/properties/PropertyForm'))
 const BuyerForm = lazy(() => import('@/pages/buyers/BuyerForm'))
 const BuyerDetail = lazy(() => import('@/pages/buyers/BuyerDetail'))
-const ChannelList = lazy(() => import('@/pages/channels/ChannelList'))
 const ChannelForm = lazy(() => import('@/pages/channels/ChannelForm'))
 const ChannelDetail = lazy(() => import('@/pages/channels/ChannelDetail'))
 const BuilderList = lazy(() => import('@/pages/builders/BuilderList'))
@@ -32,20 +29,18 @@ const HotelList = lazy(() => import('@/pages/hotels/HotelList'))
 const HotelForm = lazy(() => import('@/pages/hotels/HotelForm'))
 const HotelDetail = lazy(() => import('@/pages/hotels/HotelDetail'))
 const HotelForecastPage = lazy(() => import('@/pages/hotels/HotelForecastPage'))
-const ContractList = lazy(() => import('@/pages/contracts/ContractList'))
 const ContractForm = lazy(() => import('@/pages/contracts/ContractForm'))
 const ContractDetail = lazy(() => import('@/pages/contracts/ContractDetail'))
-const ProjectList = lazy(() => import('@/pages/projects/ProjectList'))
 const ProjectForm = lazy(() => import('@/pages/projects/ProjectForm'))
 const ProjectDetail = lazy(() => import('@/pages/projects/ProjectDetail'))
-const TaskList = lazy(() => import('@/pages/tasks/TaskList'))
 const MediaList = lazy(() => import('@/pages/media/MediaList'))
 const MediaForm = lazy(() => import('@/pages/media/MediaForm'))
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'))
-const DemandList = lazy(() => import('@/pages/matching/DemandList'))
 const DemandForm = lazy(() => import('@/pages/matching/DemandForm'))
 const DemandDetail = lazy(() => import('@/pages/matching/DemandDetail'))
-const MorePage = lazy(() => import('@/pages/MorePage'))
+const ClientsHub = lazy(() => import('@/pages/clients/ClientsHub'))
+const AssetsHub = lazy(() => import('@/pages/assets/AssetsHub'))
+const BusinessHub = lazy(() => import('@/pages/business/BusinessHub'))
 
 const routerBasename =
   import.meta.env.BASE_URL.replace(/\/$/, '') || undefined
@@ -76,28 +71,32 @@ function App() {
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
 
-                    <Route path="/investors" element={<InvestorList />} />
+                    <Route path="/clients" element={<ClientsHub />} />
+                    <Route path="/assets" element={<AssetsHub />} />
+                    <Route path="/business" element={<BusinessHub />} />
+
+                    <Route path="/investors" element={<LegacyClientsRedirect />} />
                     <Route path="/investors/new" element={<InvestorForm />} />
                     <Route path="/investors/:id" element={<InvestorDetail />} />
                     <Route path="/investors/:id/edit" element={<InvestorForm />} />
 
-                    <Route path="/lands" element={<LandList />} />
+                    <Route path="/lands" element={<Navigate to="/assets" replace />} />
                     <Route path="/lands/calculator" element={<LandCalculatorPage />} />
                     <Route path="/lands/new" element={<LandForm />} />
                     <Route path="/lands/:id/edit" element={<LandForm />} />
                     <Route path="/lands/:id" element={<LandDetail />} />
 
-                    <Route path="/properties" element={<PropertyList />} />
+                    <Route path="/properties" element={<Navigate to="/assets?tab=properties" replace />} />
                     <Route path="/properties/new" element={<PropertyForm />} />
                     <Route path="/properties/:id" element={<PropertyDetail />} />
                     <Route path="/properties/:id/edit" element={<PropertyForm />} />
 
-                    <Route path="/buyers" element={<Navigate to="/investors?tab=buyers" replace />} />
+                    <Route path="/buyers" element={<Navigate to="/clients?tab=buyers" replace />} />
                     <Route path="/buyers/new" element={<BuyerForm />} />
                     <Route path="/buyers/:id" element={<BuyerDetail />} />
                     <Route path="/buyers/:id/edit" element={<BuyerForm />} />
 
-                    <Route path="/channels" element={<ChannelList />} />
+                    <Route path="/channels" element={<Navigate to="/business?tab=channels" replace />} />
                     <Route path="/channels/new" element={<ChannelForm />} />
                     <Route path="/channels/:id/edit" element={<ChannelForm />} />
                     <Route path="/channels/:id" element={<ChannelDetail />} />
@@ -113,14 +112,12 @@ function App() {
                     <Route path="/hotels/:id" element={<HotelDetail />} />
                     <Route path="/hotels/:id/edit" element={<HotelForm />} />
 
-                    <Route path="/contracts" element={<ContractList />} />
+                    <Route path="/contracts" element={<Navigate to="/business?tab=contracts" replace />} />
                     <Route path="/contracts/new" element={<ContractForm />} />
                     <Route path="/contracts/:id/edit" element={<ContractForm />} />
                     <Route path="/contracts/:id" element={<ContractDetail />} />
 
-                    <Route path="/tasks" element={<TaskList />} />
-
-                    <Route path="/projects" element={<ProjectList />} />
+                    <Route path="/projects" element={<Navigate to="/assets?tab=projects" replace />} />
                     <Route path="/projects/new" element={<ProjectForm />} />
                     <Route path="/projects/:id/edit" element={<ProjectForm />} />
                     <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -131,19 +128,20 @@ function App() {
 
                     <Route path="/settings" element={<SettingsPage />} />
 
-                    <Route path="/matching/demands" element={<DemandList />} />
+                    <Route path="/matching/demands" element={<Navigate to="/business" replace />} />
                     <Route path="/matching/demands/new" element={<DemandForm />} />
                     <Route path="/matching/demands/:id" element={<DemandDetail />} />
 
-                    <Route path="/more" element={<MorePage />} />
-                    <Route path="/clients/investors" element={<Navigate to="/investors" replace />} />
-                    <Route path="/clients/buyers" element={<Navigate to="/investors?tab=buyers" replace />} />
-                    <Route path="/projects/lands" element={<Navigate to="/lands" replace />} />
-                    <Route path="/projects/properties" element={<Navigate to="/properties" replace />} />
-                    <Route path="/projects/hotels" element={<Navigate to="/hotels" replace />} />
-                    <Route path="/partners/channels" element={<Navigate to="/channels" replace />} />
+                    <Route path="/more" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/clients/investors" element={<Navigate to="/clients" replace />} />
+                    <Route path="/clients/buyers" element={<Navigate to="/clients?tab=buyers" replace />} />
+                    <Route path="/projects/lands" element={<Navigate to="/assets" replace />} />
+                    <Route path="/projects/properties" element={<Navigate to="/assets?tab=properties" replace />} />
+                    <Route path="/projects/hotels" element={<Navigate to="/assets?tab=projects" replace />} />
+                    <Route path="/partners/channels" element={<Navigate to="/business?tab=channels" replace />} />
                     <Route path="/partners/builders" element={<Navigate to="/builders" replace />} />
                     <Route path="/materials" element={<Navigate to="/media" replace />} />
+                    <Route path="/tasks" element={<Navigate to="/dashboard" replace />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>

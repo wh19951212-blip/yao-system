@@ -12,7 +12,7 @@ import { PROJECT_STATUS_COLORS } from '@/config/projects'
 import { formatAmountWan } from '@/utils/formatDisplay'
 import type { Project } from '@/types/database'
 
-export default function ProjectList() {
+export default function ProjectList({ embedded = false }: { embedded?: boolean }) {
   const { canWrite } = useCanWrite()
   const { ownerId } = useDataScope()
   const [projects, setProjects] = useState<Project[]>([])
@@ -38,7 +38,8 @@ export default function ProjectList() {
   })
 
   return (
-    <div className="page-shell">
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
       <PageHeader
         title="开发项目"
         description="土地上的酒店/公寓/办公等开发计划"
@@ -53,6 +54,18 @@ export default function ProjectList() {
           ) : undefined
         }
       />
+      )}
+
+      {embedded && canWrite && (
+        <div className="flex justify-end mb-4">
+          <Link to="/projects/new">
+            <Button>
+              <Plus size={16} />
+              新建项目
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="relative mb-4 max-w-md">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

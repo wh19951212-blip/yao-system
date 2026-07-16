@@ -36,6 +36,7 @@ import LandInvestorMatchManager from '@/components/lands/LandInvestorMatchManage
 import AiAnalysisPanel from '@/components/ai/AiAnalysisPanel'
 import { analyzeLand } from '@/services/aiAnalysis'
 import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
+import NextStepBar from '@/components/ui/NextStepBar'
 import {
   contractToLinkItem,
   fetchContractsByLand,
@@ -223,6 +224,7 @@ export default function LandDetail() {
           </dl>
         </section>
 
+        <div id="land-match">
         <LandInvestorMatchManager
           landId={land.id}
           canWrite={canWrite}
@@ -233,6 +235,7 @@ export default function LandDetail() {
             }
           }}
         />
+        </div>
       </div>
 
       <AiAnalysisPanel
@@ -385,6 +388,29 @@ export default function LandDetail() {
           </p>
         )}
       </Modal>
+
+      {land && (
+        <NextStepBar
+          actions={[
+            {
+              label: '创建开发项目',
+              to: `/projects/new?landId=${land.id}`,
+              variant: 'primary',
+            },
+            {
+              label: '运行匹配',
+              onClick: () =>
+                document.getElementById('land-match')?.scrollIntoView({ behavior: 'smooth' }),
+              variant: 'secondary',
+            },
+            {
+              label: '生成合同',
+              to: `/contracts/new?landId=${land.id}`,
+              variant: 'accent',
+            },
+          ]}
+        />
+      )}
     </div>
   )
 }

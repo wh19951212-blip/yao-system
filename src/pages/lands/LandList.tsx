@@ -20,7 +20,7 @@ import { useCanWrite } from '@/hooks/useCanWrite'
 import ListMobileCards from '@/components/ui/ListMobileCards'
 import type { Land } from '@/types/database'
 
-export default function LandList() {
+export default function LandList({ embedded = false }: { embedded?: boolean }) {
   const { ownerEmail } = useDataScope()
   const { canWrite } = useCanWrite()
   const [lands, setLands] = useState<Land[]>([])
@@ -65,7 +65,8 @@ export default function LandList() {
   ]
 
   return (
-    <div className="page-shell">
+    <div className={embedded ? undefined : 'page-shell'}>
+      {!embedded && (
       <PageHeader
         title="土地管理"
         description="管理土地资产、审批状态与投资人匹配"
@@ -105,6 +106,18 @@ export default function LandList() {
           </div>
         }
       />
+      )}
+
+      {embedded && canWrite && (
+        <div className="flex justify-end mb-4 gap-2">
+          <Link to="/lands/new">
+            <Button>
+              <Plus size={16} />
+              新建土地
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="mb-6 flex flex-col sm:flex-row gap-4">
         <div className="max-w-sm relative flex-1">

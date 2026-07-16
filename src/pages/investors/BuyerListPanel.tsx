@@ -5,6 +5,7 @@ import Pagination from '@/components/ui/Pagination'
 import EmptyState, { LIST_EMPTY_STATES } from '@/components/ui/EmptyState'
 import { useCanWrite } from '@/hooks/useCanWrite'
 import { formatBuyerBudget } from '@/services/buyers'
+import { formatDateTime } from '@/services/investors'
 import type { Buyer } from '@/types/database'
 
 type BuyerListPanelProps = {
@@ -16,6 +17,7 @@ type BuyerListPanelProps = {
   pageSize: number
   onPageChange: (page: number) => void
   filteredEmpty: boolean
+  hubMode?: boolean
 }
 
 export default function BuyerListPanel({
@@ -27,6 +29,7 @@ export default function BuyerListPanel({
   pageSize,
   onPageChange,
   filteredEmpty,
+  hubMode = false,
 }: BuyerListPanelProps) {
   const { canWrite } = useCanWrite()
 
@@ -67,9 +70,18 @@ export default function BuyerListPanel({
             <thead>
               <tr>
                 <th>姓名</th>
-                <th>预算</th>
-                <th>偏好类型</th>
-                <th>负责人</th>
+                {hubMode ? (
+                  <>
+                    <th>最近联系</th>
+                    <th>下一步</th>
+                  </>
+                ) : (
+                  <>
+                    <th>预算</th>
+                    <th>偏好类型</th>
+                    <th>负责人</th>
+                  </>
+                )}
                 <th />
               </tr>
             </thead>
@@ -84,20 +96,41 @@ export default function BuyerListPanel({
                       {buyer.name}
                     </Link>
                   </td>
-                  <td className="text-gray-600">
-                    {formatBuyerBudget(buyer.budget_wan)}
-                  </td>
-                  <td className="text-gray-600">
-                    {buyer.preferred_type ?? '—'}
-                  </td>
-                  <td className="text-gray-500">{buyer.owner ?? '—'}</td>
-                  <td>
-                    <Link
-                      to={`/buyers/${buyer.id}`}
-                      className="text-sm text-[#C9A84C] hover:underline"
-                    >
-                      详情 →
-                    </Link>
+                  {hubMode ? (
+                    <>
+                      <td className="text-gray-500">
+                        {formatDateTime(buyer.updated_at)}
+                      </td>
+                      <td className="text-gray-600">
+                        {buyer.preferred_type ?? '—'}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="text-gray-600">
+                        {formatBuyerBudget(buyer.budget_wan)}
+                      </td>
+                      <td className="text-gray-600">
+                        {buyer.preferred_type ?? '—'}
+                      </td>
+                      <td className="text-gray-500">{buyer.owner ?? '—'}</td>
+                    </>
+                  )}
+                  <td className="text-right">
+                    {hubMode ? (
+                      <Link to={`/buyers/${buyer.id}`}>
+                        <Button variant="secondary" className="text-xs px-3 py-1.5">
+                          跟进
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Link
+                        to={`/buyers/${buyer.id}`}
+                        className="text-sm text-[#C9A84C] hover:underline"
+                      >
+                        详情 →
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}

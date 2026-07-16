@@ -12,6 +12,7 @@ import { useDataScope } from '@/hooks/useDataScope'
 import { fetchDemandById, formatDemandTitle } from '@/services/demands'
 import { fetchChannelById } from '@/services/channels'
 import { buildContractPrefillUrl } from '@/services/relations'
+import NextStepBar from '@/components/ui/NextStepBar'
 import type { Channel } from '@/types/database'
 import {
   approveHighScoreResults,
@@ -526,6 +527,39 @@ export default function DemandDetail() {
             ))}
           </div>
         </section>
+      )}
+
+      {demand && canWrite && (
+        <NextStepBar
+          actions={[
+            {
+              label: '审核通过',
+              onClick: handleBatchApprove,
+              variant: 'primary',
+            },
+            ...(results.find(
+              (r) =>
+                (r.review_status === 'approved' ||
+                  r.review_status === 'shown_to_investor') &&
+                (r.target_type === 'land' || r.target_type === 'property'),
+            )
+              ? [
+                  {
+                    label: '生成合同',
+                    to: buildContractPrefillUrl(
+                      demand,
+                      results.find(
+                        (r) =>
+                          r.review_status === 'approved' ||
+                          r.review_status === 'shown_to_investor',
+                      )!,
+                    ),
+                    variant: 'accent' as const,
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </div>
   )
