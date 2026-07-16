@@ -48,7 +48,7 @@ export async function recordStageChange(params: {
     .single()
 
   if (error) {
-    if (error.code === '42P01') return null
+    if (error.code === '42P01' || error.code === 'PGRST205') return null
     throw error
   }
 
@@ -63,7 +63,7 @@ export async function fetchStageLogs(investorId: string) {
     .order('changed_at', { ascending: false })
 
   if (error) {
-    if (error.code === '42P01') return []
+    if (error.code === '42P01' || error.code === 'PGRST205') return []
     throw error
   }
 
@@ -77,7 +77,7 @@ export async function fetchStageUpgradesThisMonth(investorIds?: string[]) {
     .order('changed_at', { ascending: false })
 
   if (error) {
-    if (error.code === '42P01') {
+    if (error.code === '42P01' || error.code === 'PGRST205') {
       return INVESTOR_STAGES.map((stage) => ({ stage, count: 0 }))
     }
     throw error

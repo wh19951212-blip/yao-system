@@ -21,9 +21,10 @@ import type {
 } from '@/types/database'
 import { INVESTOR_GRADES, INVESTOR_STAGES, AFTER_SALES_REMINDER_DAYS, type InvestorGrade } from '@/config/app'
 import { getAppSettings } from '@/services/settings'
-import { DashboardLoadError } from '@/utils/supabaseError'
 import { safeParseISO } from '@/utils/safeDate'
-import { isSupabaseConfigured, getSupabaseConfigHint, withSupabaseFallback } from '@/lib/supabase'
+import { isSupabaseConfigured, withSupabaseFallback } from '@/lib/supabase'
+import { resolveDemoList, markDemoDataActive, assertDemoWritable } from '@/lib/demoData'
+import { getDemoInvestors, getDemoInvestorById, getDemoFollowUps } from '@/data/demoFixtures'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   differenceInDays,
@@ -53,6 +54,7 @@ export function mapInvestorFromRow(row: InvestorRow): Investor {
     motivation: row.motivation ?? row.investment_focus ?? null,
     decision_type: row.decision_type ?? row.risk_tolerance ?? null,
     source: row.source ?? null,
+    channel_id: (row.channel_id as string | null) ?? null,
     owner: row.owner ?? null,
     next_action: row.next_action ?? null,
     deadline: row.deadline ?? null,
@@ -82,6 +84,7 @@ function mapInvestorToRow(
     row.decision_type = payload.decision_type
   }
   if (payload.source !== undefined) row.source = payload.source
+  if (payload.channel_id !== undefined) row.channel_id = payload.channel_id
   if (payload.owner !== undefined) row.owner = payload.owner
   if (payload.next_action !== undefined) row.next_action = payload.next_action
   if (payload.deadline !== undefined) {
@@ -137,7 +140,7 @@ export async function fetchInvestors(
   }
 
   try {
-    return await withSupabaseFallback(async (client) => {
+    const rows = await withSupabaseFallback(async (client) => {
       let { data, error } = await runQuery(client, 'updated_at')
 
       if (
@@ -162,39 +165,35 @@ export async function fetchInvestors(
         error: null,
       }
     })
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : String(err)
-    if (/failed to fetch/i.test(message)) {
-      throw new Error(
-        '无法连接 Supabase 数据库。请检查网络，或确认 Supabase 项目是否有效并已配置到 Vercel 环境变量。',
-      )
-    }
-    if (typeof err === 'object' && err !== null && 'message' in err) {
-      const e = err as { message: string; code?: string; details?: string }
-      throw new Error(
-        `investors 表查询失败：${e.message}${e.code ? ` (${e.code})` : ''}${e.details ? ` · ${e.details}` : ''}`,
-      )
-    }
-    throw err
+
+    return resolveDemoList(rows, () => getDemoInvestors(grade, ownerEmail))
+  } catch {
+    return resolveDemoList([], () => getDemoInvestors(grade, ownerEmail))
   }
 }
 
 export async function fetchInvestorById(id: string) {
+  const demo = getDemoInvestorById(id)
   const { data, error } = await supabase
     .from('investors')
     .select('*')
     .eq('id', id)
     .single()
 
+  if (!error && data) return mapInvestorFromRow(data as InvestorRow)
+  if (demo) {
+    markDemoDataActive()
+    return demo
+  }
   if (error) throw error
-  return mapInvestorFromRow(data as InvestorRow)
+  throw new Error('投资人不存在')
 }
 
 export async function createInvestor(
   payload: InvestorInsert,
   operator?: string | null,
 ) {
+  assertDemoWritable()
   const insertPayload = { ...payload, confirmed_amount: payload.confirmed_amount ?? 0 }
   if (insertPayload.stage === '成交阶段') {
     insertPayload.is_closed_client = true
@@ -230,6 +229,7 @@ export async function updateInvestor(
   payload: InvestorUpdate,
   operator?: string | null,
 ): Promise<UpdateInvestorResult> {
+  assertDemoWritable(id)
   const current = await fetchInvestorById(id)
   let dealClosedTriggered = false
   let stageChanged = false
@@ -289,6 +289,7 @@ export async function updateInvestor(
 }
 
 export async function deleteInvestor(id: string, operator?: string | null) {
+  assertDemoWritable(id)
   const current = await fetchInvestorById(id)
   const { error } = await supabase.from('investors').delete().eq('id', id)
   if (error) throw error
@@ -305,6 +306,8 @@ export async function deleteInvestor(id: string, operator?: string | null) {
 }
 
 export async function fetchFollowUps(investorId: string) {
+  const demoRows = getDemoFollowUps(investorId)
+
   const logsResult = await supabase
     .from('follow_up_logs')
     .select('*')
@@ -312,9 +315,10 @@ export async function fetchFollowUps(investorId: string) {
     .order('logged_at', { ascending: false })
 
   if (!logsResult.error) {
-    return (logsResult.data ?? []).map((row) =>
+    const rows = (logsResult.data ?? []).map((row) =>
       mapFollowUpFromRow(row as Record<string, unknown>),
     )
+    return resolveDemoList(rows, () => demoRows)
   }
 
   const legacyResult = await supabase
@@ -323,11 +327,14 @@ export async function fetchFollowUps(investorId: string) {
     .eq('investor_id', investorId)
     .order('created_at', { ascending: false })
 
-  if (legacyResult.error) throw legacyResult.error
+  if (!legacyResult.error) {
+    const rows = (legacyResult.data ?? []).map((row) =>
+      mapFollowUpFromRow(row as Record<string, unknown>),
+    )
+    return resolveDemoList(rows, () => demoRows)
+  }
 
-  return (legacyResult.data ?? []).map((row) =>
-    mapFollowUpFromRow(row as Record<string, unknown>),
-  )
+  return resolveDemoList([], () => demoRows)
 }
 
 export async function createFollowUp(
@@ -336,6 +343,7 @@ export async function createFollowUp(
   contactType: string,
   loggedBy?: string | null,
 ) {
+  assertDemoWritable(investorId)
   const now = new Date().toISOString()
 
   const logsResult = await supabase
@@ -599,19 +607,18 @@ function buildAbandonReasonStats(lands: Awaited<ReturnType<typeof fetchLands>>) 
 export async function fetchDashboardData(
   ownerEmail?: string | null,
 ): Promise<DashboardData> {
-  if (!isSupabaseConfigured()) {
-    throw new DashboardLoadError(
-      'env',
-      new Error(getSupabaseConfigHint() ?? 'Supabase 环境变量未配置'),
-    )
-  }
-
   let investors: Investor[]
   try {
-    investors = await fetchInvestors('all', ownerEmail)
+    if (!isSupabaseConfigured()) {
+      investors = getDemoInvestors('all', ownerEmail)
+      markDemoDataActive()
+    } else {
+      investors = await fetchInvestors('all', ownerEmail)
+    }
   } catch (err) {
-    console.error('[Dashboard] fetchInvestors failed:', err)
-    throw new DashboardLoadError('fetchInvestors', err)
+    console.error('[Dashboard] fetchInvestors failed, using demo:', err)
+    investors = getDemoInvestors('all', ownerEmail)
+    markDemoDataActive()
   }
 
   const overdueInvestors = getOverdueInvestors(investors)

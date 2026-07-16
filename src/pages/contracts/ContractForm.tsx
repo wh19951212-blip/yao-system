@@ -10,6 +10,7 @@ import DateInput from '@/components/ui/DateInput'
 import ListBackLink from '@/components/ui/ListBackLink'
 import ImageRecognitionUpload from '@/components/forms/ImageRecognitionUpload'
 import { fetchInvestors } from '@/services/investors'
+import { fetchBuyers } from '@/services/buyers'
 import { fetchLands } from '@/services/lands'
 import { fetchProperties } from '@/services/properties'
 import {
@@ -19,12 +20,20 @@ import {
 } from '@/services/contracts'
 import { uploadContractPdf } from '@/services/storage'
 import {
+  CONTRACT_KIND_LABELS,
+  CONTRACT_KINDS,
+  CONTRACT_KIND_TO_TYPE,
   CONTRACT_STATUSES,
-  CONTRACT_TYPES,
+  type ContractKind,
   type ContractStatus,
-  type ContractType,
 } from '@/config/app'
-import type { Investor } from '@/types/database'
+import type { Buyer, Investor } from '@/types/database'
+import { fetchBuilders } from '@/services/builders'
+import {
+  computeChannelCommission,
+  fetchChannels,
+} from '@/services/channels'
+import type { Channel } from '@/types/database'
 import { mergeRecognizedFields } from '@/utils/formRecognition'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDataScope } from '@/hooks/useDataScope'
@@ -32,8 +41,11 @@ import { useToast } from '@/contexts/ToastContext'
 import { validateUploadFileSize } from '@/config/upload'
 
 const emptyForm = {
-  type: '开发' as ContractType,
+  contract_kind: 'development' as ContractKind,
+  type: '开发',
   investor_id: '',
+  buyer_id: '',
+  builder_id: '',
   related_kind: 'none' as 'none' | 'land' | 'property',
   land_id: '',
   property_id: '',
@@ -43,6 +55,7 @@ const emptyForm = {
   status: '进行中' as ContractStatus,
   notes: '',
   file_url: '',
+  channel_id: '',
 }
 
 export default function ContractForm() {
@@ -50,15 +63,18 @@ export default function ContractForm() {
   const isEdit = Boolean(id)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { user } = useAuth()
-  const { ownerEmail } = useDataScope()
+  const { user, profile } = useAuth()
+  const { ownerEmail, ownerId } = useDataScope()
   const toast = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState(emptyForm)
   const [investors, setInvestors] = useState<Investor[]>([])
+  const [buyers, setBuyers] = useState<Buyer[]>([])
   const [lands, setLands] = useState<{ id: string; name: string }[]>([])
   const [properties, setProperties] = useState<{ id: string; name: string }[]>([])
+  const [channels, setChannels] = useState<Channel[]>([])
+  const [builders, setBuilders] = useState<{ id: string; name: string }[]>([])
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [pdfName, setPdfName] = useState('')
   const [loading, setLoading] = useState(isEdit)
@@ -68,13 +84,19 @@ export default function ContractForm() {
   useEffect(() => {
     Promise.all([
       fetchInvestors('all', ownerEmail),
+      fetchBuyers(ownerEmail),
       fetchLands(ownerEmail),
       fetchProperties('all', ownerEmail),
+      fetchChannels(),
+      fetchBuilders(),
     ])
-      .then(([inv, landList, propList]) => {
+      .then(([inv, buyerList, landList, propList, channelList, builderList]) => {
         setInvestors(inv)
+        setBuyers(buyerList)
         setLands(landList.map((l) => ({ id: l.id, name: l.name })))
         setProperties(propList.map((p) => ({ id: p.id, name: p.name })))
+        setChannels(channelList)
+        setBuilders(builderList.map((b) => ({ id: b.id, name: b.company_name })))
       })
       .catch((err) =>
         toast.error(err instanceof Error ? err.message : '加载选项失败'),
@@ -82,10 +104,40 @@ export default function ContractForm() {
   }, [ownerEmail, toast])
 
   useEffect(() => {
+    if (isEdit) return
     const investorId = searchParams.get('investorId')
-    if (investorId && !isEdit) {
-      setForm((prev) => ({ ...prev, investor_id: investorId }))
-    }
+    const buyerId = searchParams.get('buyerId')
+    const channelId = searchParams.get('channelId')
+    const type = searchParams.get('type')
+    const contractKind = searchParams.get('contractKind')
+    const landId = searchParams.get('landId')
+    const propertyId = searchParams.get('propertyId')
+    const relatedKind = searchParams.get('relatedKind')
+    setForm((prev) => ({
+      ...prev,
+      ...(investorId ? { investor_id: investorId } : {}),
+      ...(buyerId ? { buyer_id: buyerId } : {}),
+      ...(channelId ? { channel_id: channelId } : {}),
+      ...(type ? { type, contract_kind: type === '中介' ? 'broker' as ContractKind : 'development' as ContractKind } : {}),
+      ...(contractKind && CONTRACT_KINDS.includes(contractKind as ContractKind)
+        ? {
+            contract_kind: contractKind as ContractKind,
+            type: CONTRACT_KIND_TO_TYPE[contractKind as ContractKind],
+          }
+        : {}),
+      ...(relatedKind === 'land' && landId
+        ? { related_kind: 'land' as const, land_id: landId }
+        : {}),
+      ...(relatedKind === 'property' && propertyId
+        ? { related_kind: 'property' as const, property_id: propertyId }
+        : {}),
+      ...(propertyId && !relatedKind
+        ? { related_kind: 'property' as const, property_id: propertyId }
+        : {}),
+      ...(landId && !relatedKind
+        ? { related_kind: 'land' as const, land_id: landId }
+        : {}),
+    }))
   }, [searchParams, isEdit])
 
   useEffect(() => {
@@ -93,8 +145,11 @@ export default function ContractForm() {
     fetchContractById(id)
       .then((c) => {
         setForm({
-          type: c.type as ContractType,
+          contract_kind: (c.contract_type ?? 'development') as ContractKind,
+          type: c.type,
           investor_id: c.investor_id ?? '',
+          buyer_id: c.buyer_id ?? '',
+          builder_id: c.builder_id ?? '',
           related_kind: c.land_id ? 'land' : c.property_id ? 'property' : 'none',
           land_id: c.land_id ?? '',
           property_id: c.property_id ?? '',
@@ -105,6 +160,7 @@ export default function ContractForm() {
           status: c.status as ContractStatus,
           notes: c.notes ?? '',
           file_url: c.file_url ?? '',
+          channel_id: c.channel_id ?? '',
         })
         if (c.file_url) setPdfName('已上传合同文件')
       })
@@ -113,6 +169,18 @@ export default function ContractForm() {
       )
       .finally(() => setLoading(false))
   }, [id])
+
+  useEffect(() => {
+    if (form.contract_kind !== 'broker' || !form.channel_id || !form.amount_wan) return
+    const channel = channels.find((item) => item.id === form.channel_id)
+    const computed = computeChannelCommission(
+      Number(form.amount_wan),
+      channel?.default_commission_rate,
+    )
+    if (computed != null) {
+      setForm((prev) => ({ ...prev, commission_wan: String(computed) }))
+    }
+  }, [form.contract_kind, form.channel_id, form.amount_wan, channels])
 
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -141,19 +209,34 @@ export default function ContractForm() {
       }
 
       const payload = {
-        type: form.type,
+        type: CONTRACT_KIND_TO_TYPE[form.contract_kind],
+        contract_type: form.contract_kind,
         investor_id: form.investor_id || null,
-        land_id: form.related_kind === 'land' ? form.land_id || null : null,
+        buyer_id: form.buyer_id || null,
+        builder_id: form.contract_kind === 'construction' ? form.builder_id || null : null,
+        land_id:
+          form.contract_kind !== 'broker' && form.related_kind === 'land'
+            ? form.land_id || null
+            : form.contract_kind === 'development'
+              ? form.land_id || null
+              : null,
         property_id:
-          form.related_kind === 'property' ? form.property_id || null : null,
+          form.contract_kind === 'broker' && form.related_kind === 'property'
+            ? form.property_id || null
+            : form.contract_kind === 'broker'
+              ? form.property_id || null
+              : null,
+        channel_id: form.contract_kind === 'broker' ? form.channel_id || null : null,
         amount_wan: form.amount_wan ? Number(form.amount_wan) : null,
-        commission_wan: form.commission_wan
-          ? Number(form.commission_wan)
-          : null,
+        commission_wan:
+          form.contract_kind === 'broker' && form.commission_wan
+            ? Number(form.commission_wan)
+            : null,
         signed_date: form.signed_date || null,
         status: form.status,
         file_url: fileUrl,
         notes: form.notes.trim() || null,
+        owner_id: ownerId ?? profile?.id ?? null,
       }
 
       if (isEdit && id) {
@@ -196,80 +279,143 @@ export default function ContractForm() {
           }
         />
         <Select
-          id="type"
-          label="合同类型"
-          value={form.type}
-          onChange={(e) => set('type', e.target.value)}
-          options={CONTRACT_TYPES.map((t) => ({ value: t, label: t }))}
+          id="contract_kind"
+          label="合同分类"
+          value={form.contract_kind}
+          onChange={(e) => {
+            const kind = e.target.value as ContractKind
+            setForm((prev) => ({
+              ...prev,
+              contract_kind: kind,
+              type: CONTRACT_KIND_TO_TYPE[kind],
+            }))
+          }}
+          options={CONTRACT_KINDS.map((k) => ({
+            value: k,
+            label: CONTRACT_KIND_LABELS[k],
+          }))}
           required
         />
 
-        <Select
-          id="investor_id"
-          label="关联投资人"
-          value={form.investor_id}
-          onChange={(e) => set('investor_id', e.target.value)}
-          options={[
-            { value: '', label: '未关联' },
-            ...investors.map((inv) => ({
-              value: inv.id,
-              label: `${inv.name}（${inv.grade}级）`,
-            })),
-          ]}
-        />
-
-        <Select
-          id="related_kind"
-          label="关联标的"
-          value={form.related_kind}
-          onChange={(e) => set('related_kind', e.target.value)}
-          options={[
-            { value: 'none', label: '无' },
-            { value: 'land', label: '土地' },
-            { value: 'property', label: '物件/项目' },
-          ]}
-        />
-
-        {form.related_kind === 'land' && (
-          <Select
-            id="land_id"
-            label="关联土地"
-            value={form.land_id}
-            onChange={(e) => set('land_id', e.target.value)}
-            options={[
-              { value: '', label: '请选择' },
-              ...lands.map((l) => ({ value: l.id, label: l.name })),
-            ]}
-          />
+        {form.contract_kind === 'development' && (
+          <>
+            <Select
+              id="investor_id"
+              label="关联投资人"
+              value={form.investor_id}
+              onChange={(e) => set('investor_id', e.target.value)}
+              options={[
+                { value: '', label: '未关联' },
+                ...investors.map((inv) => ({
+                  value: inv.id,
+                  label: `${inv.name}（${inv.grade}级）`,
+                })),
+              ]}
+            />
+            <Select
+              id="land_id"
+              label="关联土地"
+              value={form.land_id}
+              onChange={(e) => set('land_id', e.target.value)}
+              options={[
+                { value: '', label: '请选择' },
+                ...lands.map((l) => ({ value: l.id, label: l.name })),
+              ]}
+            />
+          </>
         )}
 
-        {form.related_kind === 'property' && (
-          <Select
-            id="property_id"
-            label="关联物件"
-            value={form.property_id}
-            onChange={(e) => set('property_id', e.target.value)}
-            options={[
-              { value: '', label: '请选择' },
-              ...properties.map((p) => ({ value: p.id, label: p.name })),
-            ]}
-          />
+        {form.contract_kind === 'broker' && (
+          <>
+            <Select
+              id="channel_id"
+              label="渠道中介"
+              value={form.channel_id}
+              onChange={(e) => set('channel_id', e.target.value)}
+              options={[
+                { value: '', label: '未关联渠道' },
+                ...channels.map((ch) => ({
+                  value: ch.id,
+                  label: `${ch.name}（默认 ${ch.default_commission_rate ?? '—'}%）`,
+                })),
+              ]}
+            />
+            <Select
+              id="investor_id"
+              label="关联投资人（可选）"
+              value={form.investor_id}
+              onChange={(e) => set('investor_id', e.target.value)}
+              options={[
+                { value: '', label: '未关联' },
+                ...investors.map((inv) => ({
+                  value: inv.id,
+                  label: `${inv.name}（${inv.grade}级）`,
+                })),
+              ]}
+            />
+            <Select
+              id="buyer_id"
+              label="关联买家"
+              value={form.buyer_id}
+              onChange={(e) => set('buyer_id', e.target.value)}
+              options={[
+                { value: '', label: '未关联' },
+                ...buyers.map((b) => ({
+                  value: b.id,
+                  label: `${b.name}${b.preferred_type ? `（${b.preferred_type}）` : ''}`,
+                })),
+              ]}
+            />
+            <Select
+              id="property_id"
+              label="关联物件"
+              value={form.property_id}
+              onChange={(e) => set('property_id', e.target.value)}
+              options={[
+                { value: '', label: '请选择' },
+                ...properties.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
+            <AmountInput
+              id="commission_wan"
+              label="佣金金额"
+              value={form.commission_wan}
+              onChange={(v) => set('commission_wan', v)}
+            />
+          </>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <AmountInput
-            id="amount_wan"
-            label="合同金额"
-            value={form.amount_wan}
-            onChange={(v) => set('amount_wan', v)}
-          />
-          <AmountInput
-            id="commission_wan"
-            label="佣金金额"
-            value={form.commission_wan}
-            onChange={(v) => set('commission_wan', v)}
-          />
-        </div>
+        {form.contract_kind === 'construction' && (
+          <>
+            <Select
+              id="builder_id"
+              label="关联建筑商"
+              value={form.builder_id}
+              onChange={(e) => set('builder_id', e.target.value)}
+              options={[
+                { value: '', label: '请选择' },
+                ...builders.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+            />
+            <Select
+              id="land_id"
+              label="关联土地/项目地块"
+              value={form.land_id}
+              onChange={(e) => set('land_id', e.target.value)}
+              options={[
+                { value: '', label: '请选择' },
+                ...lands.map((l) => ({ value: l.id, label: l.name })),
+              ]}
+            />
+          </>
+        )}
+
+        <AmountInput
+          id="amount_wan"
+          label="合同金额"
+          value={form.amount_wan}
+          onChange={(v) => set('amount_wan', v)}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <DateInput

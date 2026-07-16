@@ -5,6 +5,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import ContractStatusBadge from '@/components/ui/ContractStatusBadge'
 import { useDataScope } from '@/hooks/useDataScope'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import { fetchInvestors } from '@/services/investors'
 import ExportButton from '@/components/ui/ExportButton'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -19,7 +20,8 @@ import {
 import { exportToExcel } from '@/utils/exportExcel'
 
 export default function ContractList() {
-  const { ownerEmail, isAdmin } = useDataScope()
+  const { ownerEmail, isAdmin, isGuest } = useDataScope()
+  const { canWrite } = useCanWrite()
   const [contracts, setContracts] = useState<Awaited<ReturnType<typeof fetchContracts>>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -27,7 +29,7 @@ export default function ContractList() {
   useEffect(() => {
     const load = async () => {
       try {
-        if (isAdmin) {
+        if (isAdmin || isGuest) {
           setContracts(await fetchContracts())
           return
         }
@@ -40,7 +42,7 @@ export default function ContractList() {
       }
     }
     load()
-  }, [ownerEmail, isAdmin])
+  }, [ownerEmail, isAdmin, isGuest])
 
   const { paginated, page, setPage, totalPages, total, pageSize } =
     usePagination(contracts)
@@ -80,12 +82,14 @@ export default function ContractList() {
                 )
               }
             />
-            <Link to="/contracts/new">
-              <Button>
-                <Plus size={16} />
-                新增合同
-              </Button>
-            </Link>
+            {canWrite && (
+              <Link to="/contracts/new">
+                <Button>
+                  <Plus size={16} />
+                  新增合同
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />
@@ -164,11 +168,19 @@ export default function ContractList() {
                         </a>
                       )}
                       <Link
-                        to={`/contracts/${contract.id}/edit`}
-                        className="text-[#1A1A2A] hover:text-[#C9A84C] text-sm font-medium"
+                        to={`/contracts/${contract.id}`}
+                        className="text-gray-500 hover:text-[#1A1A2A] text-sm mr-3"
                       >
-                        编辑
+                        详情
                       </Link>
+                      {canWrite && (
+                        <Link
+                          to={`/contracts/${contract.id}/edit`}
+                          className="text-[#1A1A2A] hover:text-[#C9A84C] text-sm font-medium"
+                        >
+                          编辑
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

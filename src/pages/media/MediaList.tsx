@@ -16,6 +16,7 @@ import {
   type MediaPlatform,
   type MediaType,
 } from '@/config/app'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import type { MediaAsset } from '@/types/database'
 
 const typeIcons = {
@@ -26,6 +27,7 @@ const typeIcons = {
 
 export default function MediaList() {
   const { ownerEmail } = useDataScope()
+  const { canWrite } = useCanWrite()
   const [assets, setAssets] = useState<MediaAsset[]>([])
   const [filters, setFilters] = useListFilters('media', {
     type: 'all',
@@ -58,12 +60,14 @@ export default function MediaList() {
         title="素材库"
         description="小红书、微信等平台内容素材管理"
         actions={
-          <Link to="/media/new">
-            <Button>
-              <Plus size={16} />
-              新增素材
-            </Button>
-          </Link>
+          canWrite ? (
+            <Link to="/media/new">
+              <Button>
+                <Plus size={16} />
+                新增素材
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 

@@ -123,22 +123,13 @@ export async function withSupabaseFallback<T>(
   return second.data as T
 }
 
-if (import.meta.env.DEV || import.meta.env.PROD) {
+if (import.meta.env.DEV) {
   console.log('[Supabase] URL =', resolveSupabaseUrl() || '(空)')
-  console.log('[Supabase] PROXY =', productionProxyUrl())
-  console.log(
-    '[Supabase] ANON_KEY =',
-    maskKey(supabaseAnonKey),
-    `(length ${supabaseAnonKey.length})`,
-  )
   console.log('[Supabase] configured =', isSupabaseConfigured())
 }
 
-if (!isSupabaseConfigured()) {
-  console.error(
-    '[Supabase] 环境变量未正确配置。',
-    getSupabaseConfigHint(),
-  )
+if (!isSupabaseConfigured() && import.meta.env.DEV) {
+  console.warn('[Supabase] 环境变量未正确配置。', getSupabaseConfigHint())
 }
 
 export const supabase = createSupabaseClient()

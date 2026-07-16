@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Bot, Pencil } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Pencil, Sparkles } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
-import CopyButton from '@/components/ui/CopyButton'
 import GradeBadge from '@/components/ui/GradeBadge'
+import AiAnalysisPanel from '@/components/ai/AiAnalysisPanel'
+import { analyzeInvestor } from '@/services/aiAnalysis'
 import FollowUpTimeline from '@/components/investors/FollowUpTimeline'
 import StageChangeTimeline from '@/components/investors/StageChangeTimeline'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,7 +15,6 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useOwnerAccess } from '@/hooks/useOwnerAccess'
 import { fetchStageLogs } from '@/services/investorStageLogs'
-import { fetchAiFollowUpSuggestion } from '@/services/aiFollowUp'
 import {
   createFollowUp,
   fetchFollowUps,
@@ -26,6 +26,15 @@ import {
 } from '@/services/investors'
 import { AFTER_SALES_REMINDER_DAYS, type FollowUpType } from '@/config/app'
 import type { FollowUp, Investor, InvestorStageLog } from '@/types/database'
+import { fetchDemandsByInvestor, formatDemandTitle } from '@/services/demands'
+import { fetchChannelById } from '@/services/channels'
+import {
+  contractToLinkItem,
+  fetchContractsByInvestor,
+} from '@/services/relations'
+import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
+import { DEMAND_STATUS_LABELS } from '@/config/matching'
+import type { Channel, Contract, InvestorDemand } from '@/types/database'
 
 export default function InvestorDetail() {
   const { id } = useParams<{ id: string }>()
@@ -41,23 +50,34 @@ export default function InvestorDetail() {
   const [newNote, setNewNote] = useState('')
   const [contactType, setContactType] = useState<FollowUpType>('微信')
   const [submitting, setSubmitting] = useState(false)
-  const [aiSuggestion, setAiSuggestion] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState('')
+  const [demands, setDemands] = useState<InvestorDemand[]>([])
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [channel, setChannel] = useState<Channel | null>(null)
 
   const load = async () => {
     if (!id) return
     setLoading(true)
     setError('')
     try {
-      const [inv, follows, logs] = await Promise.all([
+      const [inv, follows, logs, demandRows, contractRows] = await Promise.all([
         fetchInvestorById(id),
         fetchFollowUps(id),
         fetchStageLogs(id),
+        fetchDemandsByInvestor(id),
+        fetchContractsByInvestor(id),
       ])
       setInvestor(inv)
       setFollowUps(follows)
       setStageLogs(logs)
+      setDemands(demandRows)
+      setContracts(contractRows)
+      if (inv.channel_id) {
+        fetchChannelById(inv.channel_id)
+          .then(setChannel)
+          .catch(() => setChannel(null))
+      } else {
+        setChannel(null)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -97,21 +117,6 @@ export default function InvestorDetail() {
       toast.error(msg)
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const handleAiSuggest = async () => {
-    if (!investor) return
-    setAiLoading(true)
-    setAiError('')
-    setAiSuggestion('')
-    try {
-      const suggestion = await fetchAiFollowUpSuggestion(investor, followUps)
-      setAiSuggestion(suggestion)
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'AI 分析失败')
-    } finally {
-      setAiLoading(false)
     }
   }
 
@@ -160,6 +165,19 @@ export default function InvestorDetail() {
     { label: '投资动机', value: investor.motivation },
     { label: '决策方式', value: investor.decision_type },
     { label: '来源', value: investor.source },
+    {
+      label: '引荐渠道',
+      value: channel ? (
+        <Link
+          to={`/channels/${channel.id}`}
+          className="text-[#C9A84C] hover:underline"
+        >
+          {channel.name}
+        </Link>
+      ) : (
+        investor.channel_id ? '—' : '—'
+      ),
+    },
     { label: '负责人', value: investor.owner },
     { label: '下一步行动', value: investor.next_action },
     { label: '截止日期', value: formatDate(investor.deadline) },
@@ -178,12 +196,20 @@ export default function InvestorDetail() {
         title={investor.name}
         description={`${investor.stage} · 预算 ${formatCurrency(investor.budget)}`}
         actions={
-          <Link to={`/investors/${investor.id}/edit`}>
-            <Button variant="secondary">
-              <Pencil size={16} />
-              编辑
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/matching/demands/new?investorId=${investor.id}`}>
+              <Button variant="accent">
+                <Sparkles size={16} />
+                创建需求单
+              </Button>
+            </Link>
+            <Link to={`/investors/${investor.id}/edit`}>
+              <Button variant="secondary">
+                <Pencil size={16} />
+                编辑
+              </Button>
+            </Link>
+          </div>
         }
       />
 
@@ -221,49 +247,25 @@ export default function InvestorDetail() {
           </dl>
         </section>
 
-        <section className="card p-6 xl:col-span-1">
-          <div className="mb-4">
-            <h2 className="section-label">AI 跟进建议</h2>
-            <p className="text-xs text-gray-500 mt-1">
-              Claude 分析 · 沟通策略 · 微信话术 · 下一步行动
-            </p>
-          </div>
-
-          <Button
-            variant="accent"
-            onClick={handleAiSuggest}
-            disabled={aiLoading}
-            className="w-full mb-4"
-          >
-            <Bot size={16} />
-            {aiLoading ? '生成中...' : 'AI 生成跟进建议'}
-          </Button>
-
-          {aiError && <div className="alert-error mb-4">{aiError}</div>}
-
-          {aiLoading && (
-            <div className="py-12 text-center text-sm text-gray-500">
-              Claude 正在分析投资人档案...
-            </div>
-          )}
-
-          {!aiLoading && aiSuggestion && (
-            <>
-              <div className="p-4 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 max-h-[360px] overflow-y-auto mb-4">
-                <p className="text-sm text-[#1A1A2A] whitespace-pre-line leading-relaxed">
-                  {aiSuggestion}
-                </p>
-              </div>
-              <CopyButton text={aiSuggestion} className="w-full" />
-            </>
-          )}
-
-          {!aiLoading && !aiSuggestion && !aiError && (
-            <p className="text-sm text-gray-500 text-center py-8">
-              点击上方按钮，获取针对当前投资人的 AI 跟进建议
-            </p>
-          )}
-        </section>
+        <AiAnalysisPanel
+          title="AI 投资分析"
+          description="分析投资人画像、适配资产类型（土地/物件/酒店）及匹配方向"
+          onAnalyze={() =>
+            analyzeInvestor(investor, {
+              followUps,
+              demands,
+              contractCount: contracts.length,
+            })
+          }
+          feedbackContext={{
+            contextType: 'investor_analysis',
+            entityType: 'investor',
+            entityId: investor.id,
+            createdBy: user?.email ?? null,
+          }}
+          taskContext={{ relatedType: 'investor', relatedId: investor.id }}
+          className="xl:col-span-1"
+        />
 
         <FollowUpTimeline
           followUps={followUps}
@@ -275,6 +277,56 @@ export default function InvestorDetail() {
           onSubmit={handleAddFollowUp}
         />
       </div>
+
+      <section className="card p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="section-label flex items-center gap-2">
+            <Sparkles size={16} className="text-[#C9A84C]" />
+            投资需求与匹配
+          </h2>
+          <Link
+            to={`/matching/demands/new?investorId=${investor.id}`}
+            className="text-sm text-[#C9A84C] hover:underline"
+          >
+            + 新建需求
+          </Link>
+        </div>
+        {demands.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">
+            暂无需求单。创建后可自动匹配土地、物件、酒店及服务。
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {demands.map((demand) => (
+              <Link
+                key={demand.id}
+                to={`/matching/demands/${demand.id}`}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 hover:border-[#C9A84C]/40 transition-colors"
+              >
+                <div>
+                  <p className="text-sm font-medium text-[#1A1A2A]">
+                    {formatDemandTitle(demand)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {DEMAND_STATUS_LABELS[demand.status]} ·{' '}
+                    {new Date(demand.updated_at).toLocaleDateString('zh-CN')}
+                  </p>
+                </div>
+                <span className="text-sm text-[#C9A84C] shrink-0">匹配中心 →</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {contracts.length > 0 && (
+        <RelatedLinksPanel
+          title="关联合同"
+          description="与该投资人相关的开发/运营/中介合同"
+          items={contracts.map(contractToLinkItem)}
+          className="mt-6"
+        />
+      )}
 
       <section className="card p-6 mt-6">
         <h2 className="section-label mb-4">阶段变化时间线</h2>

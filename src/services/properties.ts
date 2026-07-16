@@ -1,4 +1,9 @@
 import { supabase } from '@/lib/supabase'
+import { resolveDemoList, assertDemoWritable } from '@/lib/demoData'
+import {
+  DEMO_PROPERTIES,
+  getDemoPropertyById,
+} from '@/data/demoFixtures'
 import { formatAmountWan, formatRoiPercent } from '@/utils/formatDisplay'
 import type { PropertyStatus } from '@/config/app'
 import type { Property, PropertyInsert, PropertyUpdate } from '@/types/database'
@@ -34,33 +39,53 @@ export async function fetchProperties(
     return query
   }
 
-  let { data, error } = await runQuery('updated_at')
-  if (
-    error &&
-    (error.code === '42703' || error.message.includes('updated_at'))
-  ) {
-    ;({ data, error } = await runQuery('created_at'))
-  }
-  if (error) {
-    ;({ data, error } = await runQuery(null))
-  }
+  try {
+    let { data, error } = await runQuery('updated_at')
+    if (
+      error &&
+      (error.code === '42703' || error.message.includes('updated_at'))
+    ) {
+      ;({ data, error } = await runQuery('created_at'))
+    }
+    if (error) {
+      ;({ data, error } = await runQuery(null))
+    }
 
-  if (error) throw error
-  return ((data ?? []) as Property[]).map(normalizeProperty)
+    if (error) throw error
+    const rows = ((data ?? []) as Property[]).map(normalizeProperty)
+    return resolveDemoList(rows, () => {
+      let demo = DEMO_PROPERTIES.map(normalizeProperty)
+      if (ownerEmail) demo = demo.filter((row) => row.owner === ownerEmail)
+      if (status && status !== 'all') {
+        demo = demo.filter((row) => row.status === status)
+      }
+      return demo
+    })
+  } catch {
+    return resolveDemoList([], () => DEMO_PROPERTIES.map(normalizeProperty))
+  }
 }
 
 export async function fetchPropertyById(id: string) {
+  const demo = getDemoPropertyById(id)
   const { data, error } = await supabase
     .from('properties')
     .select('*')
     .eq('id', id)
     .single()
 
+  if (!error && data) return normalizeProperty(data as Property)
+  if (demo) {
+    const { markDemoDataActive } = await import('@/lib/demoData')
+    markDemoDataActive()
+    return normalizeProperty(demo)
+  }
   if (error) throw error
-  return normalizeProperty(data as Property)
+  throw new Error('物件不存在')
 }
 
 export async function createProperty(payload: PropertyInsert) {
+  assertDemoWritable()
   const { data, error } = await supabase
     .from('properties')
     .insert({
@@ -75,6 +100,7 @@ export async function createProperty(payload: PropertyInsert) {
 }
 
 export async function updateProperty(id: string, payload: PropertyUpdate) {
+  assertDemoWritable(id)
   const { data, error } = await supabase
     .from('properties')
     .update({ ...payload, updated_at: new Date().toISOString() })

@@ -20,6 +20,12 @@ import {
   type AppUser,
   type UserRole,
 } from '@/services/users'
+import {
+  BUSINESS_LINE_OPTIONS,
+  getStoredBusinessLine,
+  setStoredBusinessLine,
+  type BusinessLine,
+} from '@/config/navigation'
 import OperationLogsPanel from '@/components/settings/OperationLogsPanel'
 import { useToast } from '@/contexts/ToastContext'
 
@@ -40,6 +46,9 @@ export default function SettingsPage() {
     password: '',
   })
   const [inviting, setInviting] = useState(false)
+  const [businessLine, setBusinessLine] = useState<BusinessLine>(
+    getStoredBusinessLine() ?? 'all',
+  )
 
   useEffect(() => {
     setForm(settings)
@@ -163,6 +172,45 @@ export default function SettingsPage() {
         </dl>
       </section>
 
+      <section className="card p-6 mb-6">
+        <h2 className="section-label mb-4">业务线偏好</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          影响工作台展示的重点模块，不影响数据权限。
+        </p>
+        <div className="space-y-2">
+          {BUSINESS_LINE_OPTIONS.map((option) => (
+            <label
+              key={option.id}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${
+                businessLine === option.id
+                  ? 'border-[#C9A84C] bg-[#C9A84C]/5'
+                  : 'border-gray-200'
+              }`}
+            >
+              <input
+                type="radio"
+                name="businessLine"
+                checked={businessLine === option.id}
+                onChange={() => {
+                  setBusinessLine(option.id)
+                  setStoredBusinessLine(option.id)
+                  toast.success('业务线偏好已更新')
+                }}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium text-[#1A1A2A]">
+                  {option.label}
+                </span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  {option.description}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </section>
+
       <form onSubmit={handleSaveSettings} className="space-y-6">
         <section className="card p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -234,9 +282,51 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-500 mt-3">
             超过跟进提醒天数未联系将出现在「跟进预警」；截止日在提醒天数内将高亮显示。
           </p>
-        </section>
+      </section>
 
-        {isAdmin && (
+      <section className="card p-6 mb-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Building size={20} className="text-[#C9A84C]" />
+          <h2 className="section-label">业务线偏好</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          影响工作台展示的重点模块，不影响数据权限。
+        </p>
+        <div className="space-y-2">
+          {BUSINESS_LINE_OPTIONS.map((option) => (
+            <label
+              key={option.id}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${
+                businessLine === option.id
+                  ? 'border-[#C9A84C] bg-[#C9A84C]/5'
+                  : 'border-gray-200'
+              }`}
+            >
+              <input
+                type="radio"
+                name="businessLine"
+                checked={businessLine === option.id}
+                onChange={() => {
+                  setBusinessLine(option.id)
+                  setStoredBusinessLine(option.id)
+                  toast.success('业务线偏好已更新')
+                }}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium text-[#1A1A2A]">
+                  {option.label}
+                </span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  {option.description}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      {isAdmin && (
           <Button type="submit" disabled={saving || settingsLoading}>
             {saving ? '保存中...' : '保存系统设置'}
           </Button>

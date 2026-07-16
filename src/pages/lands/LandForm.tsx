@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -9,9 +9,17 @@ import ListBackLink from '@/components/ui/ListBackLink'
 import ImageRecognitionUpload from '@/components/forms/ImageRecognitionUpload'
 import { useAuth } from '@/contexts/AuthContext'
 import LandRoiCalculator from '@/components/lands/LandRoiCalculator'
-import { calculateRoiPercent, createLand, formatPercent } from '@/services/lands'
+import {
+  calculateRoiPercent,
+  createLand,
+  fetchLandById,
+  formatPercent,
+  updateLand,
+} from '@/services/lands'
 import { mergeRecognizedFields } from '@/utils/formRecognition'
 import { useToast } from '@/contexts/ToastContext'
+import { useDemoReadOnly } from '@/hooks/useDemoReadOnly'
+import { getSaveErrorMessage } from '@/utils/supabaseError'
 import {
   firstError,
   requirePositiveNumber,
@@ -19,9 +27,13 @@ import {
 } from '@/utils/validation'
 
 export default function LandForm() {
+  const { id } = useParams<{ id: string }>()
+  const isEdit = Boolean(id)
   const navigate = useNavigate()
   const { user } = useAuth()
   const toast = useToast()
+  const { readOnly: demoReadOnly } = useDemoReadOnly(id)
+
   const [form, setForm] = useState({
     name: '',
     location: '',
@@ -31,8 +43,29 @@ export default function LandForm() {
     legal_status: '',
     description: '',
   })
+  const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!id) return
+    fetchLandById(id)
+      .then((land) => {
+        setForm({
+          name: land.name,
+          location: land.location,
+          area_sqm: String(land.area_sqm),
+          price_wan: String(land.price_wan),
+          expected_rent_wan: String(land.expected_rent_wan ?? ''),
+          legal_status: land.legal_status ?? '',
+          description: land.description ?? '',
+        })
+      })
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : '加载失败'),
+      )
+      .finally(() => setLoading(false))
+  }, [id])
 
   const roi = useMemo(() => {
     const price = Number(form.price_wan)
@@ -48,7 +81,6 @@ export default function LandForm() {
     setForm((prev) => ({
       ...prev,
       expected_rent_wan: String(Math.round(netIncomeMan * 100) / 100),
-      price_wan: prev.price_wan || '',
     }))
   }
 
@@ -75,31 +107,30 @@ export default function LandForm() {
     const expected_rent_wan = Number(form.expected_rent_wan)
     const area_sqm = Number(form.area_sqm)
 
-    if (price_wan <= 0) {
-      setError('价格必须大于 0')
-      setSubmitting(false)
-      return
+    const payload = {
+      name: form.name.trim(),
+      location: form.location.trim(),
+      area_sqm,
+      price_wan,
+      expected_rent_wan,
+      roi_percent: calculateRoiPercent(price_wan, expected_rent_wan),
+      legal_status: form.legal_status.trim() || null,
+      description: form.description.trim() || null,
+      owner: user?.email ?? null,
     }
 
     try {
-      await createLand(
-        {
-          name: form.name.trim(),
-          location: form.location.trim(),
-          area_sqm,
-          price_wan,
-          expected_rent_wan,
-          roi_percent: calculateRoiPercent(price_wan, expected_rent_wan),
-          legal_status: form.legal_status.trim() || null,
-          description: form.description.trim() || null,
-          owner: user?.email ?? null,
-        },
-        user?.email ?? undefined,
-      )
-      toast.success('土地已创建')
-      navigate('/lands')
+      if (isEdit && id) {
+        await updateLand(id, payload, user?.email ?? undefined)
+        toast.success('土地信息已保存')
+        navigate(`/lands/${id}`)
+      } else {
+        await createLand(payload, user?.email ?? undefined)
+        toast.success('土地已创建')
+        navigate('/lands')
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '保存失败'
+      const msg = getSaveErrorMessage(err)
       setError(msg)
       toast.error(msg)
     } finally {
@@ -107,14 +138,24 @@ export default function LandForm() {
     }
   }
 
+  if (loading) {
+    return <div className="page-shell text-gray-500 text-sm">加载中...</div>
+  }
+
   return (
     <div className="page-shell max-w-6xl">
       <ListBackLink listKey="lands" basePath="/lands" />
 
       <PageHeader
-        title="新增土地"
+        title={isEdit ? '编辑土地' : '新增土地'}
         description="录入土地基本信息，可使用下方计算器测算净回报率"
       />
+
+      {demoReadOnly && (
+        <div className="alert-info mb-4">
+          当前为只读模式，无法保存。请登录账号并在 Supabase 运行 seed_demo.sql。
+        </div>
+      )}
 
       {error && <div className="alert-error mb-4">{error}</div>}
 
@@ -147,7 +188,7 @@ export default function LandForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <Input
               id="area_sqm"
-            label="面积（㎡）"
+              label="面积（㎡）"
               type="number"
               min="0"
               step="0.01"
@@ -195,22 +236,24 @@ export default function LandForm() {
           />
 
           <div className="flex gap-3 pt-2">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? '保存中...' : '保存土地'}
+            <Button type="submit" disabled={submitting || demoReadOnly}>
+              {submitting ? '保存中...' : isEdit ? '保存修改' : '保存土地'}
             </Button>
-            <Link to="/lands">
+            <Link to={isEdit && id ? `/lands/${id}` : '/lands'}>
               <Button variant="secondary">取消</Button>
             </Link>
           </div>
         </form>
 
-        <LandRoiCalculator
-          initialValues={{
-            landAreaSqm: Number(form.area_sqm) || undefined,
-            landPriceMan: Number(form.price_wan) || undefined,
-          }}
-          onApplyNetYield={applyNetYield}
-        />
+        {!isEdit && (
+          <LandRoiCalculator
+            initialValues={{
+              landAreaSqm: Number(form.area_sqm) || undefined,
+              landPriceMan: Number(form.price_wan) || undefined,
+            }}
+            onApplyNetYield={applyNetYield}
+          />
+        )}
       </div>
     </div>
   )

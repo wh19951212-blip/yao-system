@@ -21,6 +21,10 @@
       "destination": "/api/supabase"
     },
     {
+      "source": "/api/anthropic/(.*)",
+      "destination": "/api/anthropic"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

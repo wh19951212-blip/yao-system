@@ -4,33 +4,59 @@ import {
   Building2,
   FileText,
   FolderOpen,
+  Handshake,
   HardHat,
   Hotel,
   LayoutDashboard,
   Map,
   MoreHorizontal,
   Settings,
-  ShoppingBag,
+  Sparkles,
   Users,
   X,
 } from 'lucide-react'
+import {
+  isMoreModuleActive,
+  isNavItemActive,
+  MORE_MODULE_ITEMS,
+  MORE_PAGE_PATH,
+  SIDEBAR_NAV_ITEMS,
+  type NavIcon,
+} from '@/config/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 
-const MAIN_TABS = [
-  { path: '/dashboard', label: '首页', icon: LayoutDashboard },
-  { path: '/investors', label: '投资人', icon: Users },
-  { path: '/lands', label: '土地', icon: Map },
-  { path: '/properties', label: '物件', icon: Building2 },
+const MOBILE_BAR_PATHS = [
+  '/dashboard',
+  '/investors',
+  '/properties',
+  '/matching/demands',
 ] as const
 
-const MORE_LINKS = [
-  { path: '/buyers', label: '买家', icon: ShoppingBag },
-  { path: '/builders', label: '建筑商', icon: HardHat },
-  { path: '/hotels', label: '酒店', icon: Hotel },
-  { path: '/contracts', label: '合同', icon: FileText },
-  { path: '/media', label: '素材库', icon: FolderOpen },
-  { path: '/settings', label: '设置', icon: Settings },
-] as const
+const MOBILE_BAR = SIDEBAR_NAV_ITEMS.filter((item) =>
+  MOBILE_BAR_PATHS.includes(item.path as (typeof MOBILE_BAR_PATHS)[number]),
+)
+
+const MOBILE_MORE = [
+  ...SIDEBAR_NAV_ITEMS.filter(
+    (item) => !MOBILE_BAR.some((bar) => bar.path === item.path),
+  ),
+  ...MORE_MODULE_ITEMS.filter((item) => item.path !== MORE_PAGE_PATH),
+]
+
+const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
+  LayoutDashboard,
+  Users,
+  Map,
+  Building2,
+  Handshake,
+  Sparkles,
+  MoreHorizontal,
+  HardHat,
+  Hotel,
+  FileText,
+  FolderOpen,
+  Settings,
+}
 
 export default function MobileTabBar() {
   const [moreOpen, setMoreOpen] = useState(false)
@@ -38,9 +64,10 @@ export default function MobileTabBar() {
   const navigate = useNavigate()
   const { signOut } = useAuth()
 
-  const isMoreActive = MORE_LINKS.some((item) =>
-    location.pathname.startsWith(item.path),
-  )
+  const isMoreActive =
+    isMoreModuleActive(location.pathname) ||
+    location.pathname === MORE_PAGE_PATH ||
+    MOBILE_MORE.some((item) => isNavItemActive(location.pathname, item))
 
   return (
     <>
@@ -64,24 +91,28 @@ export default function MobileTabBar() {
               </button>
             </div>
             <div className="grid grid-cols-3 gap-1 p-3">
-              {MORE_LINKS.map(({ path, label, icon: Icon }) => (
-                <button
-                  key={path}
-                  type="button"
-                  onClick={() => {
-                    navigate(path)
-                    setMoreOpen(false)
-                  }}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs ${
-                    location.pathname.startsWith(path)
-                      ? 'bg-[#1B2B4B]/5 text-[#1B2B4B]'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon size={20} strokeWidth={1.75} />
-                  {label}
-                </button>
-              ))}
+              {MOBILE_MORE.map((item) => {
+                const Icon = ICONS[item.icon]
+                const active = isNavItemActive(location.pathname, item)
+                return (
+                  <button
+                    key={item.path}
+                    type="button"
+                    onClick={() => {
+                      navigate(item.path)
+                      setMoreOpen(false)
+                    }}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs ${
+                      active
+                        ? 'bg-[#1B2B4B]/5 text-[#1B2B4B]'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon size={20} strokeWidth={1.75} />
+                    {item.label}
+                  </button>
+                )
+              })}
             </div>
             <div className="px-4 pb-4">
               <button
@@ -101,30 +132,32 @@ export default function MobileTabBar() {
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-bottom">
         <div className="grid grid-cols-5 h-14">
-          {MAIN_TABS.map(({ path, label, icon: Icon }) => (
-            <NavLink
-              key={path}
-              to={path}
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center gap-0.5 text-[10px] ${
-                  isActive
-                    ? 'text-[#1B2B4B] font-medium'
-                    : 'text-gray-400'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon
-                    size={20}
-                    strokeWidth={1.75}
-                    className={isActive ? 'text-[#C9A84C]' : undefined}
-                  />
-                  {label}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {MOBILE_BAR.map((item) => {
+            const Icon = ICONS[item.icon]
+            const active = isNavItemActive(location.pathname, item)
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={`flex flex-col items-center justify-center gap-0.5 text-[10px] ${
+                  active ? 'text-[#1B2B4B] font-medium' : 'text-gray-400'
+                }`}
+              >
+                <Icon
+                  size={20}
+                  strokeWidth={1.75}
+                  className={active ? 'text-[#C9A84C]' : undefined}
+                />
+                {item.path === '/dashboard'
+                  ? '首页'
+                  : item.path === '/investors'
+                    ? '投资人'
+                    : item.path === '/matching/demands'
+                      ? '匹配'
+                      : item.label}
+              </NavLink>
+            )
+          })}
           <button
             type="button"
             onClick={() => setMoreOpen(true)}

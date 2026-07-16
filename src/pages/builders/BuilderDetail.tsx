@@ -121,7 +121,11 @@ export default function BuilderDetail() {
           ) : (
             <div className="divide-y divide-gray-200">
               {quotes.map((quote) => (
-                <div key={quote.id} className="px-6 py-4 hover:bg-gray-50">
+                <Link
+                  key={quote.id}
+                  to={quote.land_id ? `/lands/${quote.land_id}` : '#'}
+                  className={`block px-6 py-4 hover:bg-gray-50 ${quote.land_id ? '' : 'pointer-events-none'}`}
+                >
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div>
                       <p className="font-medium text-[#1A1A2A]">
@@ -152,7 +156,7 @@ export default function BuilderDetail() {
                     </span>
                     {quote.notes && <span>{quote.notes}</span>}
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

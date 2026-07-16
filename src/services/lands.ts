@@ -1,4 +1,9 @@
 import { supabase } from '@/lib/supabase'
+import { resolveDemoList, assertDemoWritable } from '@/lib/demoData'
+import {
+  DEMO_LANDS,
+  getDemoLandById,
+} from '@/data/demoFixtures'
 import { createHotel } from '@/services/hotels'
 import { logOperation } from '@/services/operationLogs'
 import { createProperty } from '@/services/properties'
@@ -84,41 +89,59 @@ function mapLandUpdate(payload: LandUpdate): Record<string, unknown> {
 }
 
 export async function fetchLands(ownerEmail?: string | null) {
-  const runQuery = (orderColumn: 'updated_at' | 'created_at' | null) => {
-    let query = supabase.from('lands').select('*')
-    if (orderColumn) {
-      query = query.order(orderColumn, { ascending: false })
-    }
-    if (ownerEmail) {
-      query = query.eq('owner', ownerEmail)
-    }
-    return query
+  const getDemo = () => {
+    let rows = [...DEMO_LANDS]
+    if (ownerEmail) rows = rows.filter((row) => row.owner === ownerEmail)
+    return rows.map(normalizeLand)
   }
 
-  let { data, error } = await runQuery('updated_at')
-  if (
-    error &&
-    (error.code === '42703' || error.message.includes('updated_at'))
-  ) {
-    ;({ data, error } = await runQuery('created_at'))
-  }
-  if (error) {
-    ;({ data, error } = await runQuery(null))
-  }
+  try {
+    const runQuery = (orderColumn: 'updated_at' | 'created_at' | null) => {
+      let query = supabase.from('lands').select('*')
+      if (orderColumn) {
+        query = query.order(orderColumn, { ascending: false })
+      }
+      if (ownerEmail) {
+        query = query.eq('owner', ownerEmail)
+      }
+      return query
+    }
 
-  if (error) throw error
-  return ((data ?? []) as Land[]).map(normalizeLand)
+    let { data, error } = await runQuery('updated_at')
+    if (
+      error &&
+      (error.code === '42703' || error.message.includes('updated_at'))
+    ) {
+      ;({ data, error } = await runQuery('created_at'))
+    }
+    if (error) {
+      ;({ data, error } = await runQuery(null))
+    }
+
+    if (error) throw error
+    const rows = ((data ?? []) as Land[]).map(normalizeLand)
+    return resolveDemoList(rows, getDemo)
+  } catch {
+    return resolveDemoList([], getDemo)
+  }
 }
 
 export async function fetchLandById(id: string) {
+  const demo = getDemoLandById(id)
   const { data, error } = await supabase
     .from('lands')
     .select('*')
     .eq('id', id)
     .single()
 
+  if (!error && data) return normalizeLand(data as Land)
+  if (demo) {
+    const { markDemoDataActive } = await import('@/lib/demoData')
+    markDemoDataActive()
+    return normalizeLand(demo)
+  }
   if (error) throw error
-  return normalizeLand(data as Land)
+  throw new Error('土地不存在')
 }
 
 export async function updateLand(
@@ -126,6 +149,7 @@ export async function updateLand(
   payload: LandUpdate,
   operator?: string | null,
 ) {
+  assertDemoWritable(id)
   const row = mapLandUpdate(payload)
 
   const { data, error } = await supabase
@@ -250,6 +274,7 @@ export async function createLand(
   payload: LandInsert,
   operator?: string | null,
 ) {
+  assertDemoWritable()
   const row = {
     name: payload.name,
     location: payload.location,
@@ -343,4 +368,24 @@ export async function fetchMatchedInvestors(
       matchId: row.id as string,
       investor: mapInvestorFromRow(row.investors as unknown as InvestorRow),
     }))
+}
+
+export async function addInvestorLandMatch(landId: string, investorId: string) {
+  assertDemoWritable()
+  const { data, error } = await supabase
+    .from('investor_land_matches')
+    .insert({ land_id: landId, investor_id: investorId })
+    .select('id')
+    .single()
+  if (error) throw error
+  return data as { id: string }
+}
+
+export async function removeInvestorLandMatch(matchId: string) {
+  assertDemoWritable(matchId)
+  const { error } = await supabase
+    .from('investor_land_matches')
+    .delete()
+    .eq('id', matchId)
+  if (error) throw error
 }

@@ -29,11 +29,15 @@ import { buildDealCongratulationNote } from '@/utils/dealCongratulationNote'
 import { useToast } from '@/contexts/ToastContext'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { useOwnerAccess } from '@/hooks/useOwnerAccess'
+import { useDemoReadOnly } from '@/hooks/useDemoReadOnly'
 import {
   firstError,
   requirePositiveNumber,
   requireTrimmed,
 } from '@/utils/validation'
+import ChannelPicker from '@/components/channels/ChannelPicker'
+import { resolveSourceWithChannel, fetchChannelById } from '@/services/channels'
+import { getSaveErrorMessage } from '@/utils/supabaseError'
 
 const emptyForm = {
   name: '',
@@ -44,6 +48,7 @@ const emptyForm = {
   motivation: '',
   decision_type: '独立' as DecisionType,
   source: '',
+  channel_id: '',
   owner: '',
   next_action: '',
   deadline: '',
@@ -69,6 +74,7 @@ export default function InvestorForm() {
   } | null>(null)
   const [recordOwner, setRecordOwner] = useState<string | null>(null)
   const { denied } = useOwnerAccess(isEdit ? recordOwner : user?.email)
+  const { readOnly: demoReadOnly } = useDemoReadOnly(id)
 
   useEffect(() => {
     if (!id) return
@@ -83,6 +89,7 @@ export default function InvestorForm() {
           motivation: inv.motivation ?? '',
           decision_type: (inv.decision_type as DecisionType) ?? '独立',
           source: inv.source ?? '',
+          channel_id: inv.channel_id ?? '',
           owner: inv.owner ?? '',
           next_action: inv.next_action ?? '',
           deadline: inv.deadline ?? '',
@@ -115,6 +122,16 @@ export default function InvestorForm() {
       return
     }
 
+    let source = form.source.trim() || null
+    if (form.channel_id) {
+      try {
+        const channel = await fetchChannelById(form.channel_id)
+        source = resolveSourceWithChannel(channel, source)
+      } catch {
+        /* keep manual source */
+      }
+    }
+
     const payload = {
       name: form.name.trim(),
       grade: form.grade,
@@ -123,7 +140,8 @@ export default function InvestorForm() {
       confirmed_amount: Number(form.confirmed_amount) || 0,
       motivation: form.motivation.trim() || null,
       decision_type: form.decision_type || null,
-      source: form.source.trim() || null,
+      channel_id: form.channel_id || null,
+      source,
       owner: form.owner.trim() || user?.email || null,
       next_action: form.next_action.trim() || null,
       deadline: form.deadline || null,
@@ -168,7 +186,7 @@ export default function InvestorForm() {
         navigate('/investors')
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '保存失败'
+      const msg = getSaveErrorMessage(err)
       setError(msg)
       toast.error(msg)
     } finally {
@@ -190,6 +208,12 @@ export default function InvestorForm() {
         title={isEdit ? '编辑投资人' : '新增投资人'}
         description="填写投资人基本信息与画像"
       />
+
+      {demoReadOnly && (
+        <div className="alert-info mb-4">
+          演示案例为只读，无法保存。运行 supabase/seed_demo.sql 后可写入真实数据。
+        </div>
+      )}
 
       {error && <div className="alert-error mb-4">{error}</div>}
 
@@ -260,22 +284,21 @@ export default function InvestorForm() {
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <Input
-            id="source"
-            label="来源"
-            value={form.source}
-            onChange={(e) => set('source', e.target.value)}
-            placeholder="如：介绍、线上、活动"
-          />
-          <Input
-            id="owner"
-            label="负责人"
-            value={form.owner}
-            onChange={(e) => set('owner', e.target.value)}
-            placeholder="内部跟进负责人"
-          />
-        </div>
+        <ChannelPicker
+          channelId={form.channel_id}
+          source={form.source}
+          onChannelChange={(channelId) => set('channel_id', channelId)}
+          onSourceChange={(source) => set('source', source)}
+          disabled={demoReadOnly}
+        />
+
+        <Input
+          id="owner"
+          label="负责人"
+          value={form.owner}
+          onChange={(e) => set('owner', e.target.value)}
+          placeholder="内部跟进负责人"
+        />
 
         <Input
           id="next_action"
@@ -300,7 +323,7 @@ export default function InvestorForm() {
         />
 
         <div className="flex gap-3 pt-2">
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting || demoReadOnly}>
             {submitting ? '保存中...' : isEdit ? '保存修改' : '创建投资人'}
           </Button>
           <Link to="/investors">

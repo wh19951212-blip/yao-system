@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import { resolveDemoList, assertDemoWritable } from '@/lib/demoData'
+import { DEMO_BUILDERS, getDemoBuilderById } from '@/data/demoFixtures'
 import { formatAmountWan, formatDisplayDate } from '@/utils/formatDisplay'
 import type {
   Builder,
@@ -11,32 +13,48 @@ import type {
 import type { BuilderTier } from '@/config/app'
 
 export async function fetchBuilders(tier?: BuilderTier | 'all') {
-  let query = supabase
-    .from('builders')
-    .select('*')
-    .order('updated_at', { ascending: false })
+  try {
+    let query = supabase
+      .from('builders')
+      .select('*')
+      .order('updated_at', { ascending: false })
 
-  if (tier && tier !== 'all') {
-    query = query.eq('tier', tier)
+    if (tier && tier !== 'all') {
+      query = query.eq('tier', tier)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    const rows = (data ?? []) as Builder[]
+    return resolveDemoList(rows, () => {
+      if (!tier || tier === 'all') return [...DEMO_BUILDERS]
+      return DEMO_BUILDERS.filter((row) => row.tier === tier)
+    })
+  } catch {
+    return resolveDemoList([], () => [...DEMO_BUILDERS])
   }
-
-  const { data, error } = await query
-  if (error) throw error
-  return (data ?? []) as Builder[]
 }
 
 export async function fetchBuilderById(id: string) {
+  const demo = getDemoBuilderById(id)
   const { data, error } = await supabase
     .from('builders')
     .select('*')
     .eq('id', id)
     .single()
 
+  if (!error && data) return data as Builder
+  if (demo) {
+    const { markDemoDataActive } = await import('@/lib/demoData')
+    markDemoDataActive()
+    return demo
+  }
   if (error) throw error
-  return data as Builder
+  throw new Error('建筑商不存在')
 }
 
 export async function createBuilder(payload: BuilderInsert) {
+  assertDemoWritable()
   const { data, error } = await supabase
     .from('builders')
     .insert({
@@ -52,6 +70,7 @@ export async function createBuilder(payload: BuilderInsert) {
 }
 
 export async function updateBuilder(id: string, payload: BuilderUpdate) {
+  assertDemoWritable(id)
   const { data, error } = await supabase
     .from('builders')
     .update({ ...payload, updated_at: new Date().toISOString() })

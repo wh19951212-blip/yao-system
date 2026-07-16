@@ -26,7 +26,9 @@ export async function fetchPropertyInvestorMatches(
     .select('*')
     .eq('property_id', property.id)
 
-  if (matchError && matchError.code !== '42P01') throw matchError
+  if (matchError && matchError.code !== '42P01' && matchError.code !== 'PGRST205') {
+    throw matchError
+  }
 
   const matchMap = new Map(
     (matches ?? []).map((m) => [

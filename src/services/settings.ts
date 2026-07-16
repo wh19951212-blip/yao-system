@@ -84,6 +84,7 @@ export async function saveAppSettings(
 
   if (error) {
     if (error.code === '42P01') return settings
+    if (error.code === 'PGRST205') return settings
     throw error
   }
 

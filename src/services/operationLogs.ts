@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import { resolveDemoList } from '@/lib/demoData'
+import { DEMO_OPERATION_LOGS } from '@/data/demoFixtures'
 import type { OperationLog } from '@/types/database'
 
 export type OperationAction =
@@ -39,24 +41,31 @@ export async function logOperation(params: {
     summary: params.summary,
   })
 
-  if (error && error.code !== '42P01') {
+  if (error && error.code !== '42P01' && error.code !== 'PGRST205') {
     console.warn('操作日志写入失败:', error.message)
   }
 }
 
 export async function fetchOperationLogs(limit = 100): Promise<OperationLog[]> {
-  const { data, error } = await supabase
-    .from('operation_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  try {
+    const { data, error } = await supabase
+      .from('operation_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
 
-  if (error) {
-    if (error.code === '42P01') return []
-    throw error
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') {
+        return resolveDemoList([], () => DEMO_OPERATION_LOGS.slice(0, limit))
+      }
+      throw error
+    }
+
+    const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>))
+    return resolveDemoList(rows, () => DEMO_OPERATION_LOGS.slice(0, limit))
+  } catch {
+    return resolveDemoList([], () => DEMO_OPERATION_LOGS.slice(0, limit))
   }
-
-  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>))
 }
 
 export function formatOperationAction(action: string) {

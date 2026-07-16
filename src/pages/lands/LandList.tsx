@@ -16,10 +16,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { fetchLands, formatPercent } from '@/services/lands'
 import { formatAmountWan } from '@/utils/formatDisplay'
 import { exportToExcel } from '@/utils/exportExcel'
+import { useCanWrite } from '@/hooks/useCanWrite'
+import ListMobileCards from '@/components/ui/ListMobileCards'
 import type { Land } from '@/types/database'
 
 export default function LandList() {
   const { ownerEmail } = useDataScope()
+  const { canWrite } = useCanWrite()
   const [lands, setLands] = useState<Land[]>([])
   const [filters, setFilters] = useListFilters('lands', {
     search: '',
@@ -91,12 +94,14 @@ export default function LandList() {
                 回报率计算器
               </Button>
             </Link>
-            <Link to="/lands/new">
-              <Button>
-                <Plus size={16} />
-                新增土地
-              </Button>
-            </Link>
+            {canWrite && (
+              <Link to="/lands/new">
+                <Button>
+                  <Plus size={16} />
+                  新增土地
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />
@@ -142,7 +147,24 @@ export default function LandList() {
         </div>
       ) : (
         <>
-          <div className="table-wrap">
+          <ListMobileCards
+            items={paginated.map((land) => ({
+              id: land.id,
+              href: `/lands/${land.id}`,
+              title: land.name,
+              subtitle: land.location,
+              badge: <LandStatusBadge status={land.status} />,
+              fields: [
+                {
+                  label: '面积',
+                  value: `${land.area_sqm?.toLocaleString('zh-CN')} ㎡`,
+                },
+                { label: '价格', value: formatAmountWan(land.price_wan) },
+                { label: '回报率', value: formatPercent(land.roi_percent) },
+              ],
+            }))}
+          />
+          <div className="table-wrap hidden md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-head">
@@ -182,6 +204,14 @@ export default function LandList() {
                       <LandStatusBadge status={land.status} />
                     </td>
                     <td className="px-5 py-4 text-right">
+                      {canWrite && (
+                        <Link
+                          to={`/lands/${land.id}/edit`}
+                          className="text-gray-500 hover:text-[#1A1A2A] text-sm mr-3"
+                        >
+                          编辑
+                        </Link>
+                      )}
                       <Link
                         to={`/lands/${land.id}`}
                         className="text-[#1A1A2A] hover:text-[#C9A84C] text-sm font-medium"

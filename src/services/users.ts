@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import { resolveDemoList } from '@/lib/demoData'
+import { DEMO_USERS } from '@/data/demoFixtures'
 
 export type UserRole = 'admin' | 'staff'
 
@@ -35,13 +37,18 @@ export async function fetchUserByEmail(email: string): Promise<AppUser | null> {
 }
 
 export async function fetchAllUsers(): Promise<AppUser[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .order('created_at', { ascending: true })
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: true })
 
-  if (error) throw error
-  return (data ?? []).map((row) => mapUser(row as Record<string, unknown>))
+    if (error) throw error
+    const rows = (data ?? []).map((row) => mapUser(row as Record<string, unknown>))
+    return resolveDemoList(rows, () => [...DEMO_USERS])
+  } catch {
+    return resolveDemoList([], () => [...DEMO_USERS])
+  }
 }
 
 export async function ensureUserProfile(

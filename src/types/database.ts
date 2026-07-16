@@ -14,6 +14,7 @@ export interface Investor {
   motivation: string | null
   decision_type: DecisionType | string | null
   source: string | null
+  channel_id: string | null
   owner: string | null
   next_action: string | null
   deadline: string | null
@@ -109,6 +110,7 @@ export interface InvestorRow {
   motivation?: string | null
   decision_type?: string | null
   source?: string | null
+  channel_id?: string | null
   owner?: string | null
   next_action?: string | null
   deadline?: string | null
@@ -193,7 +195,9 @@ export interface Property {
   description: string | null
   image_url: string | null
   land_id: string | null
+  project_id: string | null
   owner: string | null
+  channel_id: string | null
   created_at: string
   updated_at: string
 }
@@ -209,7 +213,9 @@ export type PropertyInsert = {
   description?: string | null
   image_url?: string | null
   land_id?: string | null
+  project_id?: string | null
   owner?: string | null
+  channel_id?: string | null
 }
 
 export type PropertyUpdate = Partial<PropertyInsert>
@@ -295,6 +301,7 @@ export interface Buyer {
   contact_wechat: string | null
   contact_phone: string | null
   source: string | null
+  channel_id: string | null
   owner: string | null
   notes: string | null
   created_at: string
@@ -309,6 +316,7 @@ export type BuyerInsert = {
   contact_wechat?: string | null
   contact_phone?: string | null
   source?: string | null
+  channel_id?: string | null
   owner?: string | null
   notes?: string | null
 }
@@ -319,6 +327,10 @@ export interface SearchResults {
   investors: { id: string; name: string; subtitle: string }[]
   lands: { id: string; name: string; subtitle: string }[]
   properties: { id: string; name: string; subtitle: string }[]
+  buyers: { id: string; name: string; subtitle: string }[]
+  channels: { id: string; name: string; subtitle: string }[]
+  contracts: { id: string; name: string; subtitle: string }[]
+  demands: { id: string; name: string; subtitle: string }[]
 }
 
 export interface Hotel {
@@ -333,6 +345,7 @@ export interface Hotel {
   status: string
   notes: string | null
   land_id: string | null
+  project_id: string | null
   created_at: string
   updated_at: string
   owner_investor?: { id: string; name: string } | null
@@ -349,6 +362,7 @@ export type HotelInsert = {
   status?: string
   notes?: string | null
   land_id?: string | null
+  project_id?: string | null
 }
 
 export type HotelUpdate = Partial<HotelInsert>
@@ -377,32 +391,193 @@ export type HotelMonthlyReportInsert = {
 export interface Contract {
   id: string
   type: string
+  contract_type: ContractKind | null
   investor_id: string | null
+  buyer_id: string | null
   land_id: string | null
   property_id: string | null
+  channel_id: string | null
+  builder_id: string | null
   amount_wan: number | null
   commission_wan: number | null
   signed_date: string | null
   status: string
   file_url: string | null
   notes: string | null
+  owner_id: string | null
   created_at: string
   investor?: { id: string; name: string } | null
+  buyer?: { id: string; name: string } | null
   land?: { id: string; name: string } | null
   property?: { id: string; name: string } | null
+  channel?: { id: string; name: string } | null
+  builder?: { id: string; name: string } | null
 }
+
+export type ContractKind = import('@/config/app').ContractKind
 
 export type ContractInsert = {
   type: string
+  contract_type?: ContractKind | null
   investor_id?: string | null
+  buyer_id?: string | null
   land_id?: string | null
   property_id?: string | null
+  channel_id?: string | null
+  builder_id?: string | null
   amount_wan?: number | null
   commission_wan?: number | null
   signed_date?: string | null
   status?: string
   file_url?: string | null
   notes?: string | null
+  owner_id?: string | null
+}
+
+export interface Project {
+  id: string
+  name: string
+  land_id: string | null
+  type: import('@/config/projects').ProjectType
+  status: import('@/config/projects').ProjectStatus
+  start_date: string | null
+  expected_completion: string | null
+  actual_completion: string | null
+  total_budget: number | null
+  notes: string | null
+  owner_id: string | null
+  created_at: string
+  updated_at: string
+  land?: { id: string; name: string } | null
+}
+
+export type ProjectInsert = {
+  name: string
+  land_id?: string | null
+  type?: import('@/config/projects').ProjectType
+  status?: import('@/config/projects').ProjectStatus
+  start_date?: string | null
+  expected_completion?: string | null
+  actual_completion?: string | null
+  total_budget?: number | null
+  notes?: string | null
+  owner_id?: string | null
+}
+
+export interface Task {
+  id: string
+  title: string
+  related_type: import('@/config/tasks').TaskRelatedType
+  related_id: string
+  due_date: string | null
+  status: import('@/config/tasks').TaskStatus
+  assigned_to: string | null
+  created_by: string | null
+  owner_id: string | null
+  created_at: string
+  updated_at: string
+  assignee?: { id: string; name: string; email: string } | null
+}
+
+export type TaskInsert = {
+  title: string
+  related_type: import('@/config/tasks').TaskRelatedType
+  related_id: string
+  due_date?: string | null
+  status?: import('@/config/tasks').TaskStatus
+  assigned_to?: string | null
+  created_by?: string | null
+  owner_id?: string | null
+}
+
+export interface BuyerPropertyMatch {
+  id: string
+  buyer_id: string
+  property_id: string
+  is_recommended: boolean
+  notes: string | null
+  created_at: string
+}
+
+export interface Channel {
+  id: string
+  name: string
+  entity_type: string
+  contact_name: string | null
+  contact_wechat: string | null
+  contact_phone: string | null
+  region: string | null
+  tier: string
+  cooperation_types: string[]
+  default_commission_rate: number | null
+  status: string
+  owner: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ChannelInsert = {
+  name: string
+  entity_type: string
+  contact_name?: string | null
+  contact_wechat?: string | null
+  contact_phone?: string | null
+  region?: string | null
+  tier?: string
+  cooperation_types?: string[]
+  default_commission_rate?: number | null
+  status?: string
+  owner?: string | null
+  notes?: string | null
+}
+
+export type ChannelUpdate = Partial<ChannelInsert>
+
+export interface ChannelCommission {
+  id: string
+  channel_id: string
+  contract_id: string | null
+  related_type: string | null
+  related_id: string | null
+  title: string | null
+  amount_wan: number | null
+  commission_wan: number
+  status: string
+  settled_at: string | null
+  notes: string | null
+  owner: string | null
+  created_at: string
+  channel?: { id: string; name: string } | null
+}
+
+export type ChannelCommissionInsert = {
+  channel_id: string
+  contract_id?: string | null
+  related_type?: string | null
+  related_id?: string | null
+  title?: string | null
+  amount_wan?: number | null
+  commission_wan: number
+  status?: string
+  notes?: string | null
+  owner?: string | null
+}
+
+export interface ChannelStats {
+  investorCount: number
+  buyerCount: number
+  propertyCount: number
+  contractCount: number
+  pendingCommissionWan: number
+  settledCommissionWan: number
+}
+
+export interface ChannelReferrals {
+  investors: Investor[]
+  buyers: Buyer[]
+  properties: Property[]
+  contracts: Contract[]
 }
 
 export interface LandApprovalNode {
@@ -455,3 +630,180 @@ export type MediaAssetInsert = {
 }
 
 export type MediaAssetUpdate = Partial<MediaAssetInsert>
+
+export type DemandSource = 'portal' | 'staff' | 'channel'
+export type DemandIntentType =
+  | 'invest_dev'
+  | 'invest_hotel'
+  | 'buy_property'
+  | 'general'
+export type DemandStatus =
+  | 'draft'
+  | 'submitted'
+  | 'matching'
+  | 'matched'
+  | 'in_progress'
+  | 'closed'
+  | 'cancelled'
+export type MatchTargetType =
+  | 'land'
+  | 'property'
+  | 'hotel'
+  | 'builder'
+  | 'channel'
+export type MatchReviewStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'shown_to_investor'
+
+export interface InvestorDemand {
+  id: string
+  source: DemandSource
+  portal_user_id: string | null
+  investor_id: string | null
+  buyer_id: string | null
+  channel_id: string | null
+  submitted_by: string | null
+  intent_type: DemandIntentType
+  budget_min_wan: number | null
+  budget_max_wan: number | null
+  preferred_regions: string[]
+  preferred_types: string[]
+  min_roi_percent: number | null
+  risk_tolerance: string | null
+  timeline: string | null
+  raw_description: string | null
+  parsed_criteria: Record<string, unknown> | null
+  parse_confidence: number | null
+  status: DemandStatus
+  owner: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  investor?: { id: string; name: string } | null
+  buyer?: { id: string; name: string } | null
+}
+
+export type InvestorDemandInsert = {
+  source?: DemandSource
+  investor_id?: string | null
+  buyer_id?: string | null
+  channel_id?: string | null
+  submitted_by?: string | null
+  intent_type: DemandIntentType
+  budget_min_wan?: number | null
+  budget_max_wan?: number | null
+  preferred_regions?: string[]
+  preferred_types?: string[]
+  min_roi_percent?: number | null
+  risk_tolerance?: string | null
+  timeline?: string | null
+  raw_description?: string | null
+  status?: DemandStatus
+  owner?: string | null
+  notes?: string | null
+}
+
+export type InvestorDemandUpdate = Partial<InvestorDemandInsert>
+
+export interface MatchRun {
+  id: string
+  demand_id: string
+  engine_version: string
+  rule_config: Record<string, unknown> | null
+  ai_enabled: boolean
+  status: 'running' | 'completed' | 'failed'
+  result_count: number
+  started_at: string
+  completed_at: string | null
+}
+
+export interface MatchResult {
+  id: string
+  run_id: string
+  demand_id: string
+  target_type: MatchTargetType
+  target_id: string
+  score_total: number
+  score_breakdown: Record<string, number> | null
+  match_reasons: string[]
+  ai_explanation: string | null
+  review_status: MatchReviewStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  rank: number
+  investor_status: string | null
+  investor_note: string | null
+  created_at: string
+  /** 展示用，非 DB 字段 */
+  target_name?: string
+  target_summary?: string
+}
+
+export type MatchResultUpdate = {
+  review_status?: MatchReviewStatus
+  reviewed_by?: string | null
+  investor_status?: string | null
+  investor_note?: string | null
+}
+
+export type AiFeedbackRating = 'helpful' | 'not_helpful'
+
+export interface AiFeedback {
+  id: string
+  context_type: string
+  entity_type: string | null
+  entity_id: string | null
+  rating: AiFeedbackRating
+  comment: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export type AiFeedbackInsert = {
+  context_type: string
+  entity_type?: string | null
+  entity_id?: string | null
+  rating: AiFeedbackRating
+  comment?: string | null
+  created_by?: string | null
+}
+
+export interface SuccessCase {
+  id: string
+  title: string
+  summary: string
+  case_type: string
+  intent_type: string | null
+  client_type: string | null
+  regions: string[]
+  budget_min_wan: number | null
+  budget_max_wan: number | null
+  target_type: string | null
+  target_name: string | null
+  target_id: string | null
+  contract_id: string | null
+  demand_id: string | null
+  outcome: string
+  created_by: string | null
+  created_at: string
+}
+
+export type SuccessCaseInsert = {
+  title: string
+  summary: string
+  case_type?: string
+  intent_type?: string | null
+  client_type?: string | null
+  regions?: string[]
+  budget_min_wan?: number | null
+  budget_max_wan?: number | null
+  target_type?: string | null
+  target_name?: string | null
+  target_id?: string | null
+  contract_id?: string | null
+  demand_id?: string | null
+  outcome?: string
+  created_by?: string | null
+}

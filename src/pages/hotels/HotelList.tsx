@@ -12,10 +12,12 @@ import { useDataScope } from '@/hooks/useDataScope'
 import { usePagination } from '@/hooks/usePagination'
 import { fetchInvestors } from '@/services/investors'
 import { fetchHotels } from '@/services/hotels'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import type { Hotel } from '@/types/database'
 
 export default function HotelList() {
-  const { ownerEmail, isAdmin } = useDataScope()
+  const { ownerEmail, isAdmin, isGuest } = useDataScope()
+  const { canWrite } = useCanWrite()
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [filters, setFilters] = useListFilters('hotels', { search: '' })
   const search = filters.search
@@ -25,7 +27,7 @@ export default function HotelList() {
   useEffect(() => {
     const load = async () => {
       try {
-        if (isAdmin) {
+        if (isAdmin || isGuest) {
           setHotels(await fetchHotels())
           return
         }
@@ -38,7 +40,7 @@ export default function HotelList() {
       }
     }
     load()
-  }, [ownerEmail, isAdmin])
+  }, [ownerEmail, isAdmin, isGuest])
 
   const filtered = hotels.filter(
     (h) =>
@@ -64,12 +66,14 @@ export default function HotelList() {
                 收益试算
               </Button>
             </Link>
-            <Link to="/hotels/new">
-              <Button>
-                <Plus size={16} />
-                新增酒店
-              </Button>
-            </Link>
+            {canWrite && (
+              <Link to="/hotels/new">
+                <Button>
+                  <Plus size={16} />
+                  新增酒店
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />

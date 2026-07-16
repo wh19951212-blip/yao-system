@@ -8,8 +8,9 @@
     "build": "tsc -b && vite build",
     "build:pages": "tsc -b && GITHUB_PAGES=1 vite build",
     "deploy:pages": "npm run build:pages && node scripts/prepare-gh-pages.mjs && npx gh-pages -d dist -m \"Deploy GitHub Pages\"",
-    "deploy:vercel": "npm run build && npx vercel --prod --yes",
+    "deploy:vercel": "npm run build && npx vercel --prod --yes && node scripts/set-vercel-alias.mjs",
     "lint": "eslint .",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

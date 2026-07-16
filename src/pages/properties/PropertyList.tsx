@@ -16,10 +16,12 @@ import {
   formatPriceWan,
 } from '@/services/properties'
 import { PROPERTY_TABS, type PropertyStatus } from '@/config/app'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import type { Property } from '@/types/database'
 
 export default function PropertyList() {
   const { ownerEmail } = useDataScope()
+  const { canWrite } = useCanWrite()
   const [properties, setProperties] = useState<Property[]>([])
   const [filters, setFilters] = useListFilters('properties', {
     status: 'all',
@@ -56,12 +58,14 @@ export default function PropertyList() {
         title="物件管理"
         description="中介线物件上架与状态跟踪"
         actions={
-          <Link to="/properties/new">
-            <Button>
-              <Plus size={16} />
-              新增物件
-            </Button>
-          </Link>
+          canWrite ? (
+            <Link to="/properties/new">
+              <Button>
+                <Plus size={16} />
+                新增物件
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 

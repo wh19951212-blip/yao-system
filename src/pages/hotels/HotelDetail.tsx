@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import HotelStatusBadge from '@/components/ui/HotelStatusBadge'
 import MonthlyRevenueChart from '@/components/hotels/MonthlyRevenueChart'
+import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
 import {
   calcNoi,
   fetchHotelById,
@@ -14,14 +15,20 @@ import {
   reportLabel,
   upsertHotelMonthlyReport,
 } from '@/services/hotels'
-import type { Hotel, HotelMonthlyReport } from '@/types/database'
+import { fetchLandById } from '@/services/lands'
+import { contractToLinkItem, fetchContractsByLand } from '@/services/relations'
+import { fetchMediaByRelated } from '@/services/media'
+import type { Contract, HotelMonthlyReport, Land, MediaAsset } from '@/types/database'
 
 const currentYear = new Date().getFullYear()
 
 export default function HotelDetail() {
   const { id } = useParams<{ id: string }>()
-  const [hotel, setHotel] = useState<Hotel | null>(null)
+  const [hotel, setHotel] = useState<Awaited<ReturnType<typeof fetchHotelById>> | null>(null)
   const [reports, setReports] = useState<HotelMonthlyReport[]>([])
+  const [land, setLand] = useState<Land | null>(null)
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [media, setMedia] = useState<MediaAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -44,6 +51,11 @@ export default function HotelDetail() {
       ])
       setHotel(h)
       setReports(r)
+      if (h.land_id) {
+        fetchLandById(h.land_id).then(setLand).catch(() => setLand(null))
+        fetchContractsByLand(h.land_id).then(setContracts).catch(() => setContracts([]))
+      }
+      fetchMediaByRelated('酒店', h.id).then(setMedia).catch(() => setMedia([]))
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -116,7 +128,32 @@ export default function HotelDetail() {
       label: '房间数',
       value: hotel.room_count?.toLocaleString('zh-CN') ?? null,
     },
-    { label: '业主', value: hotel.owner_investor?.name },
+    {
+      label: '业主投资人',
+      value: hotel.owner_investor ? (
+        <Link
+          to={`/investors/${hotel.owner_investor.id}`}
+          className="text-[#C9A84C] hover:underline"
+        >
+          {hotel.owner_investor.name}
+        </Link>
+      ) : (
+        '—'
+      ),
+    },
+    {
+      label: '来源土地',
+      value: land ? (
+        <Link
+          to={`/lands/${land.id}`}
+          className="text-[#C9A84C] hover:underline"
+        >
+          {land.name}
+        </Link>
+      ) : (
+        '—'
+      ),
+    },
     {
       label: '管理费率',
       value: hotel.management_fee_rate != null
@@ -167,6 +204,28 @@ export default function HotelDetail() {
       </div>
 
       {error && <div className="alert-error mb-4">{error}</div>}
+
+      {(contracts.length > 0 || media.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {contracts.length > 0 && (
+            <RelatedLinksPanel
+              title="关联合同"
+              items={contracts.map(contractToLinkItem)}
+            />
+          )}
+          {media.length > 0 && (
+            <RelatedLinksPanel
+              title="营销素材"
+              items={media.map((m) => ({
+                id: m.id,
+                label: m.title,
+                path: `/media/${m.id}/edit`,
+                subtitle: `${m.platform} · ${m.type}`,
+              }))}
+            />
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <section className="card p-6 lg:col-span-1">

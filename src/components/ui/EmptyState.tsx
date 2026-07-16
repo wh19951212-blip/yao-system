@@ -5,6 +5,7 @@ import {
   FileText,
   FolderOpen,
   HardHat,
+  Handshake,
   Hotel,
   Map,
   ShoppingBag,
@@ -84,6 +85,13 @@ export const LIST_EMPTY_STATES = {
     description: '录入买家信息，匹配合适物件',
     actionLabel: '新增买家',
     actionTo: '/buyers/new',
+  },
+  channels: {
+    icon: Handshake,
+    title: '还没有渠道中介',
+    description: '添加合作渠道，跟踪引荐与佣金结算',
+    actionLabel: '新增渠道',
+    actionTo: '/channels/new',
   },
   hotels: {
     icon: Hotel,

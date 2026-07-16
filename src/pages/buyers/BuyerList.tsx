@@ -9,10 +9,12 @@ import EmptyState, { LIST_EMPTY_STATES } from '@/components/ui/EmptyState'
 import { useListFilters } from '@/hooks/useListFilters'
 import { useDataScope } from '@/hooks/useDataScope'
 import { usePagination } from '@/hooks/usePagination'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import { fetchBuyers, formatBuyerBudget } from '@/services/buyers'
 
 export default function BuyerList() {
   const { ownerEmail } = useDataScope()
+  const { canWrite } = useCanWrite()
   const [buyers, setBuyers] = useState<Awaited<ReturnType<typeof fetchBuyers>>>([])
   const [filters, setFilters] = useListFilters('buyers', { search: '' })
   const search = filters.search
@@ -43,12 +45,14 @@ export default function BuyerList() {
         title="买家管理"
         description="中介线买家档案与物件推荐"
         actions={
-          <Link to="/buyers/new">
-            <Button>
-              <Plus size={16} />
-              新增买家
-            </Button>
-          </Link>
+          canWrite ? (
+            <Link to="/buyers/new">
+              <Button>
+                <Plus size={16} />
+                新增买家
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 

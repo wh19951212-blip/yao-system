@@ -12,6 +12,34 @@ export function normalizePropertyStatus(status: string): PropertyStatus {
   return (legacy[status] ?? status) as PropertyStatus
 }
 
+/** 存储路径格式：bucket:path/to/file.ext */
+export function toStorageRef(bucket: string, path: string) {
+  return `${bucket}:${path}`
+}
+
+export function parseStorageRef(ref: string): { bucket: string; path: string } | null {
+  const idx = ref.indexOf(':')
+  if (idx <= 0) return null
+  return { bucket: ref.slice(0, idx), path: ref.slice(idx + 1) }
+}
+
+export async function getSignedFileUrl(
+  refOrUrl: string,
+  expiresIn = 3600,
+): Promise<string> {
+  if (refOrUrl.startsWith('http://') || refOrUrl.startsWith('https://')) {
+    return refOrUrl
+  }
+  const parsed = parseStorageRef(refOrUrl)
+  if (!parsed) return refOrUrl
+
+  const { data, error } = await supabase.storage
+    .from(parsed.bucket)
+    .createSignedUrl(parsed.path, expiresIn)
+  if (error) throw error
+  return data.signedUrl
+}
+
 export async function uploadFile(
   bucket: string,
   file: File,
@@ -32,12 +60,11 @@ export async function uploadFile(
 
   if (error) {
     throw new Error(
-      `文件上传失败：${error.message}。请在 Supabase 创建 bucket「${bucket}」。`,
+      `文件上传失败：${error.message}。请在 Supabase 创建私有 bucket「${bucket}」。`,
     )
   }
 
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-  return data.publicUrl
+  return toStorageRef(bucket, path)
 }
 
 export async function uploadPropertyImage(file: File): Promise<string> {

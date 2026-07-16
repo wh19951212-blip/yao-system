@@ -11,9 +11,11 @@ import { useListFilters } from '@/hooks/useListFilters'
 import Pagination from '@/components/ui/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { fetchBuilders, formatPriceRange } from '@/services/builders'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import type { Builder } from '@/types/database'
 
 export default function BuilderList() {
+  const { canWrite } = useCanWrite()
   const [builders, setBuilders] = useState<Builder[]>([])
   const [filters, setFilters] = useListFilters('builders', { search: '' })
   const search = filters.search
@@ -45,12 +47,14 @@ export default function BuilderList() {
         title="建筑商管理"
         description="管理合作建筑商档案与报价记录"
         actions={
-          <Link to="/builders/new">
-            <Button>
-              <Plus size={16} />
-              新增建筑商
-            </Button>
-          </Link>
+          canWrite ? (
+            <Link to="/builders/new">
+              <Button>
+                <Plus size={16} />
+                新增建筑商
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 

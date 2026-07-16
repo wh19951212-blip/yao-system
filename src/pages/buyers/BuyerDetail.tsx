@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, Pencil } from 'lucide-react'
+import { ArrowLeft, Building2, FileText, Pencil, Sparkles } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import PropertyStatusBadge from '@/components/ui/PropertyStatusBadge'
+import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
 import {
   fetchBuyerById,
   fetchRecommendedPropertiesForBuyer,
   formatBuyerBudget,
 } from '@/services/buyers'
+import { fetchChannelById } from '@/services/channels'
+import { fetchDemandsByBuyer, formatDemandTitle } from '@/services/demands'
+import {
+  contractToLinkItem,
+  fetchContractsByBuyer,
+} from '@/services/relations'
 import { formatPriceWan } from '@/services/properties'
-import type { Buyer, Property } from '@/types/database'
+import { DEMAND_STATUS_LABELS } from '@/config/matching'
+import type { Buyer, Channel, Contract, InvestorDemand, Property } from '@/types/database'
 import AccessDenied from '@/components/ui/AccessDenied'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useOwnerAccess } from '@/hooks/useOwnerAccess'
@@ -19,6 +27,9 @@ export default function BuyerDetail() {
   const { id } = useParams<{ id: string }>()
   const [buyer, setBuyer] = useState<Buyer | null>(null)
   const [properties, setProperties] = useState<Property[]>([])
+  const [channel, setChannel] = useState<Channel | null>(null)
+  const [demands, setDemands] = useState<InvestorDemand[]>([])
+  const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { denied } = useOwnerAccess(buyer?.owner)
@@ -29,8 +40,19 @@ export default function BuyerDetail() {
     fetchBuyerById(id)
       .then(async (buyerData) => {
         setBuyer(buyerData)
-        const props = await fetchRecommendedPropertiesForBuyer(buyerData)
+        const [props, demandRows, contractRows] = await Promise.all([
+          fetchRecommendedPropertiesForBuyer(buyerData),
+          fetchDemandsByBuyer(buyerData.id),
+          fetchContractsByBuyer(buyerData.id),
+        ])
         setProperties(props)
+        setDemands(demandRows)
+        setContracts(contractRows)
+        if (buyerData.channel_id) {
+          fetchChannelById(buyerData.channel_id)
+            .then(setChannel)
+            .catch(() => setChannel(null))
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -48,7 +70,7 @@ export default function BuyerDetail() {
     return (
       <div className="page-shell">
         <div className="alert-error">{error || '买家不存在'}</div>
-        <Link to="/buyers" className="link-back mt-4">
+        <Link to="/investors?tab=buyers" className="link-back mt-4">
           ← 返回列表
         </Link>
       </div>
@@ -64,13 +86,26 @@ export default function BuyerDetail() {
     { label: '微信', value: buyer.contact_wechat },
     { label: '电话', value: buyer.contact_phone },
     { label: '来源', value: buyer.source },
+    {
+      label: '引荐渠道',
+      value: channel ? (
+        <Link
+          to={`/channels/${channel.id}`}
+          className="text-[#C9A84C] hover:underline"
+        >
+          {channel.name}
+        </Link>
+      ) : (
+        '—'
+      ),
+    },
     { label: '负责人', value: buyer.owner },
     { label: '备注', value: buyer.notes },
   ]
 
   return (
     <div className="page-shell">
-      <Link to="/buyers" className="link-back">
+      <Link to="/investors?tab=buyers" className="link-back">
         <ArrowLeft size={16} />
         返回列表
       </Link>
@@ -81,16 +116,30 @@ export default function BuyerDetail() {
           .filter(Boolean)
           .join(' · ')}
         actions={
-          <Link to={`/buyers/${buyer.id}/edit`}>
-            <Button variant="secondary">
-              <Pencil size={16} />
-              编辑
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/matching/demands/new?buyerId=${buyer.id}`}>
+              <Button variant="accent">
+                <Sparkles size={16} />
+                创建需求单
+              </Button>
+            </Link>
+            <Link to={`/contracts/new?type=中介&buyerId=${buyer.id}${buyer.channel_id ? `&channelId=${buyer.channel_id}` : ''}`}>
+              <Button variant="secondary">
+                <FileText size={16} />
+                新建合同
+              </Button>
+            </Link>
+            <Link to={`/buyers/${buyer.id}/edit`}>
+              <Button variant="secondary">
+                <Pencil size={16} />
+                编辑
+              </Button>
+            </Link>
+          </div>
         }
       />
 
-      <section className="card p-6 mb-8">
+      <section className="card p-6 mb-6">
         <h2 className="section-label mb-4">买家信息</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {infoRows.map(({ label, value }) => (
@@ -102,11 +151,33 @@ export default function BuyerDetail() {
         </dl>
       </section>
 
+      {demands.length > 0 && (
+        <RelatedLinksPanel
+          title="购房需求与匹配"
+          description="智能匹配中心的需求单"
+          items={demands.map((d) => ({
+            id: d.id,
+            label: formatDemandTitle(d),
+            path: `/matching/demands/${d.id}`,
+            subtitle: DEMAND_STATUS_LABELS[d.status],
+          }))}
+          className="mb-6"
+        />
+      )}
+
+      {contracts.length > 0 && (
+        <RelatedLinksPanel
+          title="关联合同"
+          items={contracts.map(contractToLinkItem)}
+          className="mb-6"
+        />
+      )}
+
       <section className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="section-label">推荐物件</h2>
           <p className="text-xs text-gray-500 mt-1">
-            根据预算与偏好类型自动匹配
+            根据预算与偏好类型自动匹配（结果已持久化）
           </p>
         </div>
 

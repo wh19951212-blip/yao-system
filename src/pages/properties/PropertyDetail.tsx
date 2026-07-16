@@ -5,19 +5,38 @@ import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import PropertyStatusBadge from '@/components/ui/PropertyStatusBadge'
 import PropertyInvestorMatches from '@/components/properties/PropertyInvestorMatches'
+import { useAuth } from '@/contexts/AuthContext'
+import AiAnalysisPanel from '@/components/ai/AiAnalysisPanel'
+import { analyzeProperty } from '@/services/aiAnalysis'
+import { fetchPropertyInvestorMatches } from '@/services/propertyMatches'
+import { useDataScope } from '@/hooks/useDataScope'
+import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
 import AccessDenied from '@/components/ui/AccessDenied'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useOwnerAccess } from '@/hooks/useOwnerAccess'
+import { fetchChannelById } from '@/services/channels'
+import { fetchLandById } from '@/services/lands'
+import { fetchMediaByRelated } from '@/services/media'
+import {
+  contractToLinkItem,
+  fetchContractsByProperty,
+} from '@/services/relations'
 import {
   fetchPropertyById,
   formatCommission,
   formatPriceWan,
 } from '@/services/properties'
-import type { Property } from '@/types/database'
+import type { Channel, Contract, Land, MediaAsset, Property } from '@/types/database'
 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>()
+  const { user } = useAuth()
+  const { ownerEmail } = useDataScope()
   const [property, setProperty] = useState<Property | null>(null)
+  const [land, setLand] = useState<Land | null>(null)
+  const [channel, setChannel] = useState<Channel | null>(null)
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [media, setMedia] = useState<MediaAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { denied } = useOwnerAccess(property?.owner)
@@ -26,7 +45,25 @@ export default function PropertyDetail() {
     if (!id) return
     setLoading(true)
     fetchPropertyById(id)
-      .then(setProperty)
+      .then(async (prop) => {
+        setProperty(prop)
+        const [contractRows, mediaRows] = await Promise.all([
+          fetchContractsByProperty(prop.id),
+          fetchMediaByRelated('项目', prop.id),
+        ])
+        setContracts(contractRows)
+        setMedia(mediaRows)
+        if (prop.land_id) {
+          fetchLandById(prop.land_id)
+            .then(setLand)
+            .catch(() => setLand(null))
+        }
+        if (prop.channel_id) {
+          fetchChannelById(prop.channel_id)
+            .then(setChannel)
+            .catch(() => setChannel(null))
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [id])
@@ -56,6 +93,32 @@ export default function PropertyDetail() {
     { label: '位置', value: property.location },
     { label: '类型', value: property.type },
     { label: '来源', value: property.source_type },
+    {
+      label: '来源土地',
+      value: land ? (
+        <Link
+          to={`/lands/${land.id}`}
+          className="text-[#C9A84C] hover:underline"
+        >
+          {land.name}
+        </Link>
+      ) : (
+        '—'
+      ),
+    },
+    {
+      label: '代理渠道',
+      value: channel ? (
+        <Link
+          to={`/channels/${channel.id}`}
+          className="text-[#C9A84C] hover:underline"
+        >
+          {channel.name}
+        </Link>
+      ) : (
+        '—'
+      ),
+    },
     { label: '价格', value: formatPriceWan(property.price_wan) },
     { label: '佣金率', value: formatCommission(property.commission_rate) },
     { label: '描述', value: property.description },
@@ -111,6 +174,52 @@ export default function PropertyDetail() {
           </dl>
         </section>
       </div>
+
+      {contracts.length > 0 && (
+        <RelatedLinksPanel
+          title="关联合同"
+          items={contracts.map(contractToLinkItem)}
+          className="mb-6"
+        />
+      )}
+
+      {media.length > 0 && (
+        <RelatedLinksPanel
+          title="营销素材"
+          items={media.map((m) => ({
+            id: m.id,
+            label: m.title,
+            path: `/media/${m.id}/edit`,
+            subtitle: `${m.platform} · ${m.type}`,
+          }))}
+          className="mb-6"
+        />
+      )}
+
+      <AiAnalysisPanel
+        title="AI 物件分析"
+        description="分析物件价值定位、目标客群及投资人/买家匹配策略"
+        onAnalyze={async () => {
+          if (!property) throw new Error('物件不存在')
+          const investorMatches = await fetchPropertyInvestorMatches(
+            property,
+            ownerEmail,
+          )
+          return analyzeProperty(property, {
+            investorMatches,
+            landName: land?.name ?? null,
+            channelName: channel?.name ?? null,
+          })
+        }}
+        feedbackContext={{
+          contextType: 'property_analysis',
+          entityType: 'property',
+          entityId: property.id,
+          createdBy: user?.email ?? null,
+        }}
+        taskContext={{ relatedType: 'land', relatedId: property.land_id ?? property.id }}
+        className="mb-6"
+      />
 
       <PropertyInvestorMatches property={property} />
     </div>

@@ -60,18 +60,7 @@ export const GRADE_COLORS: Record<
 export const BUYER_PREFERRED_TYPES = ['酒店', '住宅', '商业'] as const
 export type BuyerPreferredType = (typeof BUYER_PREFERRED_TYPES)[number]
 
-export const NAV_ITEMS = [
-  { path: '/dashboard', label: '仪表盘', icon: 'LayoutDashboard' },
-  { path: '/investors', label: '投资人', icon: 'Users' },
-  { path: '/lands', label: '土地', icon: 'Map' },
-  { path: '/properties', label: '物件', icon: 'Building2' },
-  { path: '/buyers', label: '买家', icon: 'ShoppingBag' },
-  { path: '/builders', label: '建筑商', icon: 'HardHat' },
-  { path: '/hotels', label: '酒店', icon: 'Hotel' },
-  { path: '/contracts', label: '合同', icon: 'FileText' },
-  { path: '/media', label: '素材库', icon: 'FolderOpen' },
-  { path: '/settings', label: '设置', icon: 'Settings' },
-] as const
+export { NAV_ITEMS } from '@/config/navigation'
 
 export const LAND_STATUSES = [
   '分析中',
@@ -219,8 +208,108 @@ export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 export const CONTRACT_TYPES = ['开发', '中介', '运营'] as const
 export type ContractType = (typeof CONTRACT_TYPES)[number]
 
+/** 合同业务分类（DB: contract_type） */
+export const CONTRACT_KINDS = ['development', 'broker', 'construction'] as const
+export type ContractKind = (typeof CONTRACT_KINDS)[number]
+
+export const CONTRACT_KIND_LABELS: Record<ContractKind, string> = {
+  development: '开发合同',
+  broker: '中介合同',
+  construction: '施工合同',
+}
+
+export const CONTRACT_KIND_TO_TYPE: Record<ContractKind, ContractType> = {
+  development: '开发',
+  broker: '中介',
+  construction: '运营',
+}
+
 export const CONTRACT_STATUSES = ['进行中', '已完成'] as const
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number]
+
+export const CHANNEL_ENTITY_TYPES = ['公司', '个人'] as const
+export type ChannelEntityType = (typeof CHANNEL_ENTITY_TYPES)[number]
+
+export const CHANNEL_TIERS = ['S', 'A', 'B', 'C'] as const
+export type ChannelTier = (typeof CHANNEL_TIERS)[number]
+
+export const CHANNEL_COOPERATION_TYPES = [
+  '全渠道',
+  '投资人介绍',
+  '买家介绍',
+  '物件介绍',
+] as const
+export type ChannelCooperationType = (typeof CHANNEL_COOPERATION_TYPES)[number]
+
+export const CHANNEL_STATUSES = ['合作中', '暂停', '终止'] as const
+export type ChannelStatus = (typeof CHANNEL_STATUSES)[number]
+
+export const COMMISSION_SETTLEMENT_STATUSES = ['待结算', '已结算'] as const
+export type CommissionSettlementStatus =
+  (typeof COMMISSION_SETTLEMENT_STATUSES)[number]
+
+export const CHANNEL_TIER_COLORS: Record<
+  ChannelTier,
+  { bg: string; text: string; border: string }
+> = {
+  S: {
+    bg: 'bg-[#C9A84C]/10',
+    text: 'text-[#C9A84C]',
+    border: 'border-[#C9A84C]/30',
+  },
+  A: {
+    bg: 'bg-blue-50',
+    text: 'text-blue-500',
+    border: 'border-blue-200',
+  },
+  B: {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-500',
+    border: 'border-emerald-200',
+  },
+  C: {
+    bg: 'bg-gray-50',
+    text: 'text-gray-400',
+    border: 'border-gray-200',
+  },
+}
+
+export const CHANNEL_STATUS_COLORS: Record<
+  ChannelStatus,
+  { bg: string; text: string; border: string }
+> = {
+  合作中: {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-600',
+    border: 'border-emerald-200',
+  },
+  暂停: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-600',
+    border: 'border-amber-200',
+  },
+  终止: {
+    bg: 'bg-gray-50',
+    text: 'text-gray-500',
+    border: 'border-gray-200',
+  },
+}
+
+export const COMMISSION_STATUS_COLORS: Record<
+  CommissionSettlementStatus,
+  { bg: string; text: string; border: string }
+> = {
+  待结算: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-600',
+    border: 'border-amber-200',
+  },
+  已结算: {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-600',
+    border: 'border-emerald-200',
+  },
+}
 
 export const CONTRACT_STATUS_COLORS: Record<
   ContractStatus,

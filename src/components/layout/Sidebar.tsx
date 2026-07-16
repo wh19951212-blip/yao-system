@@ -1,36 +1,44 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2,
-  FileText,
-  FolderOpen,
-  HardHat,
-  Hotel,
+  Handshake,
   LayoutDashboard,
   LogOut,
   Map,
-  Settings,
-  ShoppingBag,
+  Sparkles,
   Users,
 } from 'lucide-react'
-import { appConfig, NAV_ITEMS } from '@/config/app'
+import { appConfig } from '@/config/app'
+import {
+  MORE_PAGE_PATH,
+  SIDEBAR_NAV_ITEMS,
+  isNavItemActive,
+  type NavIcon,
+} from '@/config/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 
-const iconMap = {
+const iconMap: Record<
+  NavIcon,
+  typeof LayoutDashboard
+> = {
   LayoutDashboard,
   Users,
   Map,
   Building2,
-  HardHat,
-  Hotel,
-  FileText,
-  FolderOpen,
-  Settings,
-  ShoppingBag,
+  Handshake,
+  Sparkles,
+  MoreHorizontal: LayoutDashboard,
+  HardHat: LayoutDashboard,
+  Hotel: LayoutDashboard,
+  FileText: LayoutDashboard,
+  FolderOpen: LayoutDashboard,
+  Settings: LayoutDashboard,
 }
 
 export default function Sidebar() {
   const { signOut, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const handleSignOut = async () => {
     await signOut()
@@ -51,38 +59,47 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 py-4 px-2 space-y-0.5">
-        {NAV_ITEMS.map((item) => {
+      <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
+        {SIDEBAR_NAV_ITEMS.map((item) => {
           const Icon = iconMap[item.icon]
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              className={({ isActive }) =>
+              className={() =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-r-lg text-sm ${
-                  isActive ? 'nav-item-active' : 'nav-item'
+                  isNavItemActive(location.pathname, item)
+                    ? 'nav-item-active'
+                    : 'nav-item'
                 }`
               }
             >
-              {({ isActive }) => (
-                <>
-                  <Icon
-                    size={17}
-                    strokeWidth={1.75}
-                    className={isActive ? 'text-[#C9A84C]' : 'text-white/60'}
-                  />
-                  {item.label}
-                </>
-              )}
+              {() => {
+                const isActive = isNavItemActive(location.pathname, item)
+                return (
+                  <>
+                    <Icon
+                      size={17}
+                      strokeWidth={1.75}
+                      className={isActive ? 'text-[#C9A84C]' : 'text-white/60'}
+                    />
+                    {item.label}
+                  </>
+                )
+              }}
             </NavLink>
           )
         })}
       </nav>
 
-      <div className="p-3 border-t border-white/10">
-        <p className="px-3 text-xs text-white/50 truncate mb-2">
-          {user?.email}
-        </p>
+      <div className="p-3 border-t border-white/10 space-y-1">
+        <Link
+          to={MORE_PAGE_PATH}
+          className="block px-3 py-2 text-xs text-white/45 hover:text-[#C9A84C] transition-colors"
+        >
+          更多功能（建筑商 · 酒店 · 合同…）→
+        </Link>
+        <p className="px-3 text-xs text-white/50 truncate">{user?.email}</p>
         <button
           type="button"
           onClick={handleSignOut}

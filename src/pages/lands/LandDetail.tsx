@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, MessageSquare } from 'lucide-react'
+import { CheckCircle2, Hammer, MessageSquare, Pencil } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import CopyButton from '@/components/ui/CopyButton'
 import Select from '@/components/ui/Select'
 import Modal from '@/components/ui/Modal'
-import GradeBadge from '@/components/ui/GradeBadge'
 import ListBackLink from '@/components/ui/ListBackLink'
+import LandStatusBadge from '@/components/ui/LandStatusBadge'
 import LandRoiCalculator from '@/components/lands/LandRoiCalculator'
 import LandApprovalTracker from '@/components/lands/LandApprovalTracker'
 import LandQuoteManager from '@/components/lands/LandQuoteManager'
@@ -18,6 +18,7 @@ import { useToast } from '@/contexts/ToastContext'
 import AccessDenied from '@/components/ui/AccessDenied'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useOwnerAccess } from '@/hooks/useOwnerAccess'
+import { useCanWrite } from '@/hooks/useCanWrite'
 import {
   buildWechatLandNote,
   saveWechatNoteToMedia,
@@ -27,12 +28,22 @@ import {
 import { formatAmountWan } from '@/utils/formatDisplay'
 import {
   fetchLandById,
-  fetchMatchedInvestors,
   formatArea,
   formatPercent,
 } from '@/services/lands'
-import { formatCurrency, formatDateTime } from '@/services/investors'
-import type { Land, MatchedInvestor } from '@/types/database'
+import { formatDateTime } from '@/services/investors'
+import LandInvestorMatchManager from '@/components/lands/LandInvestorMatchManager'
+import AiAnalysisPanel from '@/components/ai/AiAnalysisPanel'
+import { analyzeLand } from '@/services/aiAnalysis'
+import RelatedLinksPanel from '@/components/ui/RelatedLinksPanel'
+import {
+  contractToLinkItem,
+  fetchContractsByLand,
+  fetchHotelsByLandId,
+  fetchPropertiesByLandId,
+} from '@/services/relations'
+import { fetchProjectsByLandId } from '@/services/projects'
+import type { Contract, Hotel, Land, MatchedInvestor, Project, Property } from '@/types/database'
 import type { LandRoiInputs } from '@/utils/landRoiCalculator'
 
 export default function LandDetail() {
@@ -41,6 +52,10 @@ export default function LandDetail() {
   const toast = useToast()
   const [land, setLand] = useState<Land | null>(null)
   const [matches, setMatches] = useState<MatchedInvestor[]>([])
+  const [downstreamProperties, setDownstreamProperties] = useState<Property[]>([])
+  const [downstreamHotels, setDownstreamHotels] = useState<Hotel[]>([])
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [landProjects, setLandProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [roiInputs, setRoiInputs] = useState<Partial<LandRoiInputs>>({})
@@ -52,17 +67,24 @@ export default function LandDetail() {
   const [wechatGenerating, setWechatGenerating] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const { denied } = useOwnerAccess(land?.owner)
+  const { canWrite } = useCanWrite()
 
   useEffect(() => {
     if (!id) return
     setLoading(true)
-    Promise.all([fetchLandById(id), fetchMatchedInvestors(id)])
-      .then(([landData, matchData]) => {
+    Promise.all([
+      fetchLandById(id),
+      fetchPropertiesByLandId(id),
+      fetchHotelsByLandId(id),
+      fetchContractsByLand(id),
+      fetchProjectsByLandId(id),
+    ])
+      .then(([landData, props, hotels, contractRows, projects]) => {
         setLand(landData)
-        setMatches(matchData)
-        if (matchData.length > 0) {
-          setWechatInvestorId(matchData[0].investor.id)
-        }
+        setDownstreamProperties(props)
+        setDownstreamHotels(hotels)
+        setContracts(contractRows)
+        setLandProjects(projects)
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -143,28 +165,48 @@ export default function LandDetail() {
         title={land.name}
         description={land.location}
         actions={
-          <div className="flex flex-wrap items-center gap-3">
-            {land.status !== '已完工' && land.status !== '已放弃' && (
-              <Button variant="secondary" onClick={() => setCompleteOpen(true)}>
-                <CheckCircle2 size={16} />
-                项目完工
+          canWrite ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to={`/projects/new?landId=${land.id}`}>
+                <Button variant="secondary">
+                  <Hammer size={16} />
+                  创建开发项目
+                </Button>
+              </Link>
+              <Link to={`/lands/${land.id}/edit`}>
+                <Button variant="secondary">
+                  <Pencil size={16} />
+                  编辑
+                </Button>
+              </Link>
+              {land.status !== '已完工' && land.status !== '已放弃' && (
+                <Button variant="secondary" onClick={() => setCompleteOpen(true)}>
+                  <CheckCircle2 size={16} />
+                  项目完工
+                </Button>
+              )}
+              <Button variant="accent" onClick={() => setWechatOpen(true)}>
+                <MessageSquare size={16} />
+                生成微信笔记
               </Button>
-            )}
-            <Button variant="accent" onClick={() => setWechatOpen(true)}>
-              <MessageSquare size={16} />
-              生成微信笔记
-            </Button>
-          </div>
+            </div>
+          ) : undefined
         }
       />
 
-      <div className="mb-6">
-        <LandStatusManager
-          land={land}
-          operator={user?.email}
-          onUpdated={setLand}
-        />
-      </div>
+      {canWrite ? (
+        <div className="mb-6">
+          <LandStatusManager
+            land={land}
+            operator={user?.email}
+            onUpdated={setLand}
+          />
+        </div>
+      ) : (
+        <div className="mb-6">
+          <LandStatusBadge status={land.status} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="card p-6">
@@ -181,42 +223,88 @@ export default function LandDetail() {
           </dl>
         </section>
 
-        <section className="card overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="section-label">匹配投资人</h2>
-            <p className="text-xs text-gray-500 mt-1">与本地块关联的意向投资人</p>
-          </div>
-
-          {matches.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-500">
-              暂无匹配投资人
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {matches.map(({ matchId, investor }) => (
-                <div
-                  key={matchId}
-                  className="px-6 py-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <Link
-                      to={`/investors/${investor.id}`}
-                      className="font-medium text-[#1A1A2A] hover:text-[#C9A84C] transition-colors"
-                    >
-                      {investor.name}
-                    </Link>
-                    <GradeBadge grade={investor.grade} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                    <span>阶段：{investor.stage}</span>
-                    <span>预算：{formatCurrency(investor.budget)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        <LandInvestorMatchManager
+          landId={land.id}
+          canWrite={canWrite}
+          onMatchesChange={(next) => {
+            setMatches(next)
+            if (next.length > 0 && !wechatInvestorId) {
+              setWechatInvestorId(next[0].investor.id)
+            }
+          }}
+        />
       </div>
+
+      <AiAnalysisPanel
+        title="AI 土地分析"
+        description="分析地块投资价值、开发路径及投资人匹配度"
+        onAnalyze={() =>
+          analyzeLand(land, {
+            matchedInvestors: matches,
+            downstreamCount:
+              downstreamProperties.length + downstreamHotels.length,
+          })
+        }
+        feedbackContext={{
+          contextType: 'land_analysis',
+          entityType: 'land',
+          entityId: land.id,
+          createdBy: user?.email ?? null,
+        }}
+        taskContext={{ relatedType: 'land', relatedId: land.id }}
+        className="mt-6"
+      />
+
+      {landProjects.length > 0 && (
+        <RelatedLinksPanel
+          title="开发项目"
+          description="由此地块发起的开发计划"
+          items={landProjects.map((p) => ({
+            id: p.id,
+            label: p.name,
+            path: `/projects/${p.id}`,
+            subtitle: `${p.type} · ${p.status}`,
+          }))}
+          className="mt-6"
+        />
+      )}
+
+      {(downstreamProperties.length > 0 || downstreamHotels.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          {downstreamProperties.length > 0 && (
+            <RelatedLinksPanel
+              title="下游物件"
+              description="由本地块开发转化"
+              items={downstreamProperties.map((p) => ({
+                id: p.id,
+                label: p.name,
+                path: `/properties/${p.id}`,
+                subtitle: [p.type, p.status].filter(Boolean).join(' · '),
+              }))}
+            />
+          )}
+          {downstreamHotels.length > 0 && (
+            <RelatedLinksPanel
+              title="下游酒店"
+              description="由本地块运营转化"
+              items={downstreamHotels.map((h) => ({
+                id: h.id,
+                label: h.name,
+                path: `/hotels/${h.id}`,
+                subtitle: h.status,
+              }))}
+            />
+          )}
+        </div>
+      )}
+
+      {contracts.length > 0 && (
+        <RelatedLinksPanel
+          title="关联合同"
+          items={contracts.map(contractToLinkItem)}
+          className="mt-6"
+        />
+      )}
 
       <div className="mt-8">
         <LandRoiCalculator
@@ -225,9 +313,12 @@ export default function LandDetail() {
         />
       </div>
 
-      <LandApprovalTracker landId={land.id} />
-
-      <LandQuoteManager landId={land.id} />
+      {canWrite && (
+        <>
+          <LandApprovalTracker landId={land.id} />
+          <LandQuoteManager landId={land.id} />
+        </>
+      )}
 
       <LandCompleteModal
         open={completeOpen}

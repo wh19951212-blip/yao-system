@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { setGuestReadOnly } from '@/lib/writeGuard'
 import {
   ensureUserProfile,
   type AppUser,
@@ -18,6 +19,8 @@ interface AuthContextValue {
   session: Session | null
   profile: AppUser | null
   isAdmin: boolean
+  isGuest: boolean
+  canWrite: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signInAsGuest: () => void
@@ -30,8 +33,8 @@ const GUEST_STORAGE_KEY = 'yao_guest_session'
 const guestProfile: AppUser = {
   id: '00000000-0000-4000-8000-000000000001',
   email: 'guest@yao.local',
-  name: '管理员',
-  role: 'admin',
+  name: '访客',
+  role: 'staff',
   created_at: new Date().toISOString(),
 }
 
@@ -46,11 +49,29 @@ const guestUser = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function activateGuestSession(setters: {
+  setUser: (u: User) => void
+  setProfile: (p: AppUser) => void
+  setSession: (s: Session | null) => void
+}) {
+  sessionStorage.setItem(GUEST_STORAGE_KEY, '1')
+  setGuestReadOnly(true)
+  setters.setSession(null)
+  setters.setUser(guestUser)
+  setters.setProfile(guestProfile)
+}
+
+function clearGuestSession() {
+  sessionStorage.removeItem(GUEST_STORAGE_KEY)
+  setGuestReadOnly(false)
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isGuest, setIsGuest] = useState(false)
 
   const loadProfile = useCallback(async (authUser: User | null) => {
     if (!authUser?.email) {
@@ -74,11 +95,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (sessionStorage.getItem(GUEST_STORAGE_KEY) === '1') {
+      setIsGuest(true)
+      setGuestReadOnly(true)
       setUser(guestUser)
       setProfile(guestProfile)
       setLoading(false)
       return
     }
+
+    setIsGuest(false)
+    setGuestReadOnly(false)
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -99,7 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase()
-    sessionStorage.removeItem(GUEST_STORAGE_KEY)
+    clearGuestSession()
+    setIsGuest(false)
 
     let { error } = await supabase.auth.signInWithPassword({
       email: normalizedEmail,
@@ -128,16 +155,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signInAsGuest = () => {
-    sessionStorage.setItem(GUEST_STORAGE_KEY, '1')
-    setSession(null)
-    setUser(guestUser)
-    setProfile(guestProfile)
+    setIsGuest(true)
+    activateGuestSession({ setUser, setProfile, setSession })
     setLoading(false)
   }
 
   const signOut = async () => {
     const wasGuest = sessionStorage.getItem(GUEST_STORAGE_KEY) === '1'
-    sessionStorage.removeItem(GUEST_STORAGE_KEY)
+    clearGuestSession()
+    setIsGuest(false)
     if (!wasGuest) {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
@@ -147,7 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null)
   }
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = !isGuest && profile?.role === 'admin'
+  const canWrite = !isGuest && Boolean(user)
 
   return (
     <AuthContext.Provider
@@ -156,6 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         profile,
         isAdmin,
+        isGuest,
+        canWrite,
         loading,
         signIn,
         signInAsGuest,

@@ -26,6 +26,8 @@ import {
   type PropertyStatus,
   type PropertyType,
 } from '@/config/app'
+import { fetchChannels } from '@/services/channels'
+import type { Channel } from '@/types/database'
 import { mergeRecognizedFields } from '@/utils/formRecognition'
 
 const emptyForm = {
@@ -38,6 +40,7 @@ const emptyForm = {
   status: '進行中' as PropertyStatus,
   description: '',
   image_url: '',
+  channel_id: '',
 }
 
 export default function PropertyForm() {
@@ -55,6 +58,12 @@ export default function PropertyForm() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  const [channels, setChannels] = useState<Channel[]>([])
+
+  useEffect(() => {
+    fetchChannels().then(setChannels).catch(() => setChannels([]))
+  }, [])
+
   useEffect(() => {
     if (!id) return
     fetchPropertyById(id)
@@ -70,6 +79,7 @@ export default function PropertyForm() {
           status: p.status as PropertyStatus,
           description: p.description ?? '',
           image_url: p.image_url ?? '',
+          channel_id: p.channel_id ?? '',
         })
         if (p.image_url) setImagePreview(p.image_url)
       })
@@ -124,6 +134,10 @@ export default function PropertyForm() {
         status: form.status,
         description: form.description.trim() || null,
         image_url: imageUrl,
+        channel_id:
+          form.source_type === '代理' && form.channel_id
+            ? form.channel_id
+            : null,
         owner: user?.email ?? null,
       }
 
@@ -203,6 +217,22 @@ export default function PropertyForm() {
             required
           />
         </div>
+
+        {form.source_type === '代理' && (
+          <Select
+            id="channel_id"
+            label="渠道中介"
+            value={form.channel_id}
+            onChange={(e) => set('channel_id', e.target.value)}
+            options={[
+              { value: '', label: '未指定渠道' },
+              ...channels.map((ch) => ({
+                value: ch.id,
+                label: `${ch.name}（${ch.entity_type}）`,
+              })),
+            ]}
+          />
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <AmountInput

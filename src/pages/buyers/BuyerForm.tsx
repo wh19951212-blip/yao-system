@@ -16,6 +16,11 @@ import {
 import AmountInput from '@/components/ui/AmountInput'
 import ListBackLink from '@/components/ui/ListBackLink'
 import { useToast } from '@/contexts/ToastContext'
+import ChannelPicker from '@/components/channels/ChannelPicker'
+import {
+  fetchChannelById,
+  resolveSourceWithChannel,
+} from '@/services/channels'
 import { mergeRecognizedFields } from '@/utils/formRecognition'
 
 const emptyForm = {
@@ -26,6 +31,7 @@ const emptyForm = {
   contact_wechat: '',
   contact_phone: '',
   source: '',
+  channel_id: '',
   notes: '',
 }
 
@@ -53,6 +59,7 @@ export default function BuyerForm() {
           contact_wechat: buyer.contact_wechat ?? '',
           contact_phone: buyer.contact_phone ?? '',
           source: buyer.source ?? '',
+          channel_id: buyer.channel_id ?? '',
           notes: buyer.notes ?? '',
         })
       })
@@ -68,6 +75,16 @@ export default function BuyerForm() {
     setError('')
     setSubmitting(true)
 
+    let source = form.source.trim() || null
+    if (form.channel_id) {
+      try {
+        const channel = await fetchChannelById(form.channel_id)
+        source = resolveSourceWithChannel(channel, source)
+      } catch {
+        /* keep manual source */
+      }
+    }
+
     const payload = {
       name: form.name.trim(),
       budget_wan: form.budget_wan ? Number(form.budget_wan) : null,
@@ -75,7 +92,8 @@ export default function BuyerForm() {
       motivation: form.motivation.trim() || null,
       contact_wechat: form.contact_wechat.trim() || null,
       contact_phone: form.contact_phone.trim() || null,
-      source: form.source.trim() || null,
+      channel_id: form.channel_id || null,
+      source,
       owner: user?.email ?? null,
       notes: form.notes.trim() || null,
     }
@@ -84,11 +102,11 @@ export default function BuyerForm() {
       if (isEdit && id) {
         await updateBuyer(id, payload)
         toast.success('买家信息已保存')
-        navigate('/buyers')
+        navigate('/investors?tab=buyers')
       } else {
         await createBuyer(payload)
         toast.success('买家已创建')
-        navigate('/buyers')
+        navigate('/investors?tab=buyers')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
@@ -103,7 +121,7 @@ export default function BuyerForm() {
 
   return (
     <div className="page-shell max-w-2xl">
-      <ListBackLink listKey="buyers" basePath="/buyers" />
+      <ListBackLink listKey="investors" basePath="/investors?tab=buyers" />
 
       <PageHeader
         title={isEdit ? '编辑买家' : '新增买家'}
@@ -176,11 +194,11 @@ export default function BuyerForm() {
           />
         </div>
 
-        <Input
-          id="source"
-          label="来源"
-          value={form.source}
-          onChange={(e) => set('source', e.target.value)}
+        <ChannelPicker
+          channelId={form.channel_id}
+          source={form.source}
+          onChannelChange={(channelId) => set('channel_id', channelId)}
+          onSourceChange={(source) => set('source', source)}
         />
 
         <Textarea
@@ -194,7 +212,7 @@ export default function BuyerForm() {
           <Button type="submit" disabled={submitting}>
             {submitting ? '保存中...' : isEdit ? '保存修改' : '创建买家'}
           </Button>
-          <Link to={isEdit ? `/buyers/${id}` : '/buyers'}>
+          <Link to={isEdit ? `/buyers/${id}` : '/investors?tab=buyers'}>
             <Button variant="secondary">取消</Button>
           </Link>
         </div>

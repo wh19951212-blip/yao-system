@@ -1,4 +1,10 @@
 import { supabase } from '@/lib/supabase'
+import { resolveDemoList, markDemoDataActive, assertDemoWritable } from '@/lib/demoData'
+import {
+  DEMO_HOTELS,
+  DEMO_HOTEL_REPORTS,
+  getDemoHotelById,
+} from '@/data/demoFixtures'
 import { formatDisplayDate } from '@/utils/formatDisplay'
 import type {
   Hotel,
@@ -9,34 +15,50 @@ import type {
 } from '@/types/database'
 
 export async function fetchHotels(ownerInvestorIds?: string[] | null) {
-  const { data, error } = await supabase
-    .from('hotels')
-    .select(
-      `
+  try {
+    const { data, error } = await supabase
+      .from('hotels')
+      .select(
+        `
       *,
       investors:owner_investor_id ( id, name )
     `,
-    )
-    .order('updated_at', { ascending: false })
+      )
+      .order('updated_at', { ascending: false })
 
-  if (error) throw error
+    if (error) throw error
 
-  let rows = data ?? []
-  if (ownerInvestorIds && ownerInvestorIds.length > 0) {
-    const allowed = new Set(ownerInvestorIds)
-    rows = rows.filter(
-      (row) =>
-        row.owner_investor_id && allowed.has(row.owner_investor_id as string),
-    )
+    let rows = (data ?? []).map((row) => ({
+      ...(row as Hotel),
+      owner_investor: row.investors as { id: string; name: string } | null,
+    })) as Hotel[]
+
+    if (ownerInvestorIds && ownerInvestorIds.length > 0) {
+      const allowed = new Set(ownerInvestorIds)
+      rows = rows.filter(
+        (row) =>
+          row.owner_investor_id && allowed.has(row.owner_investor_id as string),
+      )
+    }
+
+    return resolveDemoList(rows, () => {
+      let demo = [...DEMO_HOTELS]
+      if (ownerInvestorIds && ownerInvestorIds.length > 0) {
+        const allowed = new Set(ownerInvestorIds)
+        demo = demo.filter(
+          (row) =>
+            row.owner_investor_id && allowed.has(row.owner_investor_id),
+        )
+      }
+      return demo
+    })
+  } catch {
+    return resolveDemoList([], () => [...DEMO_HOTELS])
   }
-
-  return rows.map((row) => ({
-    ...(row as Hotel),
-    owner_investor: row.investors as { id: string; name: string } | null,
-  })) as Hotel[]
 }
 
 export async function fetchHotelById(id: string) {
+  const demo = getDemoHotelById(id)
   const { data, error } = await supabase
     .from('hotels')
     .select(
@@ -48,15 +70,43 @@ export async function fetchHotelById(id: string) {
     .eq('id', id)
     .single()
 
+  if (!error && data) {
+    return {
+      ...(data as Hotel),
+      owner_investor: data.investors as { id: string; name: string } | null,
+    } as Hotel
+  }
+  if (demo) {
+    markDemoDataActive()
+    return demo
+  }
   if (error) throw error
+  throw new Error('酒店不存在')
+}
 
-  return {
-    ...(data as Hotel),
-    owner_investor: data.investors as { id: string; name: string } | null,
-  } as Hotel
+export async function fetchHotelMonthlyReports(hotelId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('hotel_monthly_reports')
+      .select('*')
+      .eq('hotel_id', hotelId)
+      .order('year', { ascending: true })
+      .order('month', { ascending: true })
+
+    if (error) throw error
+    const rows = (data ?? []) as HotelMonthlyReport[]
+    return resolveDemoList(rows, () =>
+      DEMO_HOTEL_REPORTS.filter((row) => row.hotel_id === hotelId),
+    )
+  } catch {
+    return resolveDemoList([], () =>
+      DEMO_HOTEL_REPORTS.filter((row) => row.hotel_id === hotelId),
+    )
+  }
 }
 
 export async function createHotel(payload: HotelInsert) {
+  assertDemoWritable()
   const { data, error } = await supabase
     .from('hotels')
     .insert({
@@ -71,6 +121,7 @@ export async function createHotel(payload: HotelInsert) {
 }
 
 export async function updateHotel(id: string, payload: HotelUpdate) {
+  assertDemoWritable(id)
   const { data, error } = await supabase
     .from('hotels')
     .update({ ...payload, updated_at: new Date().toISOString() })
@@ -80,18 +131,6 @@ export async function updateHotel(id: string, payload: HotelUpdate) {
 
   if (error) throw error
   return data as Hotel
-}
-
-export async function fetchHotelMonthlyReports(hotelId: string) {
-  const { data, error } = await supabase
-    .from('hotel_monthly_reports')
-    .select('*')
-    .eq('hotel_id', hotelId)
-    .order('year', { ascending: true })
-    .order('month', { ascending: true })
-
-  if (error) throw error
-  return (data ?? []) as HotelMonthlyReport[]
 }
 
 export async function upsertHotelMonthlyReport(

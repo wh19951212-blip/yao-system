@@ -4,7 +4,8 @@ import TopBar from '@/components/layout/TopBar'
 import Sidebar from '@/components/layout/Sidebar'
 import MobileTabBar from '@/components/layout/MobileTabBar'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-
+import DemoBanner from '@/components/ui/DemoBanner'
+import GuestBanner from '@/components/ui/GuestBanner'
 export default function AppShell() {
   const { user, loading } = useAuth()
   const location = useLocation()
@@ -26,6 +27,8 @@ export default function AppShell() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
+        <GuestBanner />
+        <DemoBanner />
         <main className="flex-1 overflow-auto bg-[#F7F8FA] pb-16 md:pb-0">
           <Outlet />
         </main>
