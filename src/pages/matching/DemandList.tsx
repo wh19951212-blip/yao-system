@@ -68,8 +68,8 @@ export default function DemandList() {
   return (
     <div className="page-shell">
       <PageHeader
-        title="智能匹配"
-        description="管理投资人需求，运行匹配引擎，审核推荐结果"
+        title="需求与匹配"
+        description="从投资人发起需求，运行匹配引擎，审核推荐结果"
         actions={
           canWrite ? (
             <Link to="/matching/demands/new">

@@ -35,8 +35,10 @@ const HotelForecastPage = lazy(() => import('@/pages/hotels/HotelForecastPage'))
 const ContractList = lazy(() => import('@/pages/contracts/ContractList'))
 const ContractForm = lazy(() => import('@/pages/contracts/ContractForm'))
 const ContractDetail = lazy(() => import('@/pages/contracts/ContractDetail'))
+const ProjectList = lazy(() => import('@/pages/projects/ProjectList'))
 const ProjectForm = lazy(() => import('@/pages/projects/ProjectForm'))
 const ProjectDetail = lazy(() => import('@/pages/projects/ProjectDetail'))
+const TaskList = lazy(() => import('@/pages/tasks/TaskList'))
 const MediaList = lazy(() => import('@/pages/media/MediaList'))
 const MediaForm = lazy(() => import('@/pages/media/MediaForm'))
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'))
@@ -116,6 +118,9 @@ function App() {
                     <Route path="/contracts/:id/edit" element={<ContractForm />} />
                     <Route path="/contracts/:id" element={<ContractDetail />} />
 
+                    <Route path="/tasks" element={<TaskList />} />
+
+                    <Route path="/projects" element={<ProjectList />} />
                     <Route path="/projects/new" element={<ProjectForm />} />
                     <Route path="/projects/:id/edit" element={<ProjectForm />} />
                     <Route path="/projects/:id" element={<ProjectDetail />} />

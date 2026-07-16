@@ -4,23 +4,31 @@ import {
   Calculator,
   FileText,
   Handshake,
+  Hammer,
+  ListTodo,
   Map,
-  MoreHorizontal,
   Sparkles,
   TrendingUp,
   Users,
 } from 'lucide-react'
 import { DEMO_IDS } from '@/data/demoFixtures'
-import { MORE_PAGE_PATH } from '@/config/navigation'
+import type { BusinessLine } from '@/config/navigation'
+import { useBusinessLine } from '@/hooks/useBusinessLine'
 
-const MODULES = [
-  { to: '/investors', label: '投资人', icon: Users, hint: '含买家 · 5+2 演示' },
-  { to: '/lands', label: '土地', icon: Map, hint: '3 块演示' },
-  { to: '/properties', label: '物件', icon: Building2, hint: '3 个演示' },
-  { to: '/channels', label: '渠道中介', icon: Handshake, hint: '3 个演示' },
-  { to: '/matching/demands', label: '智能匹配', icon: Sparkles, hint: '需求→项目' },
-  { to: MORE_PAGE_PATH, label: '更多功能', icon: MoreHorizontal, hint: '建筑商·酒店·合同' },
-] as const
+const MODULES: {
+  to: string
+  label: string
+  icon: typeof Users
+  lines: BusinessLine[]
+}[] = [
+  { to: '/investors', label: '投资人', icon: Users, lines: ['development', 'brokerage', 'all'] },
+  { to: '/matching/demands', label: '需求与匹配', icon: Sparkles, lines: ['development', 'brokerage', 'all'] },
+  { to: '/lands', label: '土地', icon: Map, lines: ['development', 'all'] },
+  { to: '/projects', label: '开发项目', icon: Hammer, lines: ['development', 'all'] },
+  { to: '/properties', label: '物件', icon: Building2, lines: ['brokerage', 'all'] },
+  { to: '/channels', label: '渠道', icon: Handshake, lines: ['brokerage', 'all'] },
+  { to: '/tasks', label: '我的任务', icon: ListTodo, lines: ['development', 'brokerage', 'all'] },
+]
 
 const DEMO_CASES = [
   {
@@ -37,6 +45,11 @@ const DEMO_CASES = [
     to: `/lands/${DEMO_IDS.landShibuya}`,
     label: '涩谷区地块 A',
     desc: 'ROI 分析、审批流程',
+  },
+  {
+    to: `/projects/${DEMO_IDS.projectShibuya}`,
+    label: '涩谷酒店开发',
+    desc: '开发项目进度',
   },
   {
     to: `/channels/${DEMO_IDS.channelTokyo}`,
@@ -63,22 +76,31 @@ const DEMO_CASES = [
 ] as const
 
 export default function DashboardQuickNav() {
+  const { businessLine } = useBusinessLine()
+  const line = businessLine === 'all' ? null : businessLine
+
   return (
     <section className="space-y-6">
       <div>
         <h2 className="section-label mb-4">功能入口</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {MODULES.map(({ to, label, icon: Icon, hint }) => (
-            <Link
-              key={to}
-              to={to}
-              className="card p-4 hover:border-[#C9A84C]/40 transition-colors"
-            >
-              <Icon size={20} className="text-[#C9A84C] mb-2" />
-              <p className="font-medium text-sm text-[#1A1A2A]">{label}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>
-            </Link>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {MODULES.map(({ to, label, icon: Icon, lines }) => {
+            const highlight = line && lines.includes(line)
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={`card p-4 transition-colors ${
+                  highlight
+                    ? 'border-[#C9A84C] bg-[#C9A84C]/5 ring-1 ring-[#C9A84C]/30'
+                    : 'hover:border-[#C9A84C]/40'
+                }`}
+              >
+                <Icon size={20} className="text-[#C9A84C] mb-2" />
+                <p className="font-medium text-sm text-[#1A1A2A]">{label}</p>
+              </Link>
+            )
+          })}
         </div>
       </div>
 
@@ -100,9 +122,7 @@ export default function DashboardQuickNav() {
                   <Icon size={18} className="text-[#C9A84C]" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-sm text-[#1A1A2A]">
-                    {item.label}
-                  </p>
+                  <p className="font-medium text-sm text-[#1A1A2A]">{item.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
                 </div>
               </Link>

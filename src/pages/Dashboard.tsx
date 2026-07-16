@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button'
 import PoolCard from '@/components/dashboard/PoolCard'
 import DashboardStatsSection from '@/components/dashboard/DashboardStatsSection'
 import UpcomingDeadlines from '@/components/dashboard/UpcomingDeadlines'
+import BusinessLineSwitcher from '@/components/dashboard/BusinessLineSwitcher'
 import DashboardQuickNav from '@/components/dashboard/DashboardQuickNav'
 import MyTasksPanel from '@/components/dashboard/MyTasksPanel'
 import DailyTodoModal, {
@@ -143,6 +144,8 @@ export default function Dashboard() {
             : '业务概览 · 资金池与待办'
         }
       />
+
+      <BusinessLineSwitcher />
 
       <DashboardQuickNav />
 

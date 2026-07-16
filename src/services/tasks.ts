@@ -23,27 +23,51 @@ function mapTask(row: Record<string, unknown>): Task {
 }
 
 export async function fetchMyTasks(userId: string | null, ownerId?: string | null) {
-  if (!userId && !ownerId) return resolveDemoList([], () => [...DEMO_TASKS])
+  return fetchUserTasks(userId, { statuses: ['pending', 'in_progress'], ownerId })
+}
+
+export async function fetchUserTasks(
+  userId: string | null,
+  options?: {
+    statuses?: Task['status'][]
+    ownerId?: string | null
+  },
+) {
+  const statuses = options?.statuses
+  if (!userId && !options?.ownerId) {
+    return resolveDemoList([], () => {
+      let demo = [...DEMO_TASKS]
+      if (statuses?.length) demo = demo.filter((t) => statuses.includes(t.status))
+      return demo
+    })
+  }
   try {
-    let query = supabase
-      .from('tasks')
-      .select('*')
-      .in('status', ['pending', 'in_progress'])
-      .order('due_date', { ascending: true, nullsFirst: false })
+    let query = supabase.from('tasks').select('*').order('due_date', {
+      ascending: true,
+      nullsFirst: false,
+    })
+
+    if (statuses?.length) query = query.in('status', statuses)
 
     if (userId) {
       query = query.or(`assigned_to.eq.${userId},owner_id.eq.${userId}`)
-    } else if (ownerId) {
-      query = query.eq('owner_id', ownerId)
+    } else if (options?.ownerId) {
+      query = query.eq('owner_id', options.ownerId)
     }
 
     const { data, error } = await query
     if (error) throw error
     const rows = (data ?? []).map((row) => mapTask(row as Record<string, unknown>))
-    return resolveDemoList(rows, () => [...DEMO_TASKS])
+    return resolveDemoList(rows, () => {
+      let demo = [...DEMO_TASKS]
+      if (statuses?.length) demo = demo.filter((t) => statuses.includes(t.status))
+      return demo
+    })
   } catch {
     markDemoDataActive()
-    return [...DEMO_TASKS]
+    let demo = [...DEMO_TASKS]
+    if (statuses?.length) demo = demo.filter((t) => statuses.includes(t.status))
+    return demo
   }
 }
 

@@ -2,45 +2,34 @@ import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2,
-  FileText,
-  FolderOpen,
   Handshake,
   HardHat,
   Hotel,
   LayoutDashboard,
   Map,
   MoreHorizontal,
-  Settings,
   Sparkles,
   Users,
   X,
+  FileText,
+  FolderOpen,
+  Settings,
 } from 'lucide-react'
 import {
+  DAILY_NAV_ITEMS,
+  ASSET_NAV_ITEMS,
   isMoreModuleActive,
   isNavItemActive,
-  MORE_MODULE_ITEMS,
-  MORE_PAGE_PATH,
-  SIDEBAR_NAV_ITEMS,
+  MORE_NAV_ITEMS,
   type NavIcon,
 } from '@/config/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 
-const MOBILE_BAR_PATHS = [
-  '/dashboard',
-  '/investors',
-  '/properties',
-  '/matching/demands',
-] as const
-
-const MOBILE_BAR = SIDEBAR_NAV_ITEMS.filter((item) =>
-  MOBILE_BAR_PATHS.includes(item.path as (typeof MOBILE_BAR_PATHS)[number]),
-)
-
-const MOBILE_MORE = [
-  ...SIDEBAR_NAV_ITEMS.filter(
-    (item) => !MOBILE_BAR.some((bar) => bar.path === item.path),
-  ),
-  ...MORE_MODULE_ITEMS.filter((item) => item.path !== MORE_PAGE_PATH),
+const MOBILE_BAR = [
+  DAILY_NAV_ITEMS[0],
+  DAILY_NAV_ITEMS[1],
+  DAILY_NAV_ITEMS[2],
+  ASSET_NAV_ITEMS[0],
 ]
 
 const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
@@ -50,6 +39,8 @@ const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   Building2,
   Handshake,
   Sparkles,
+  ListTodo: LayoutDashboard,
+  Hammer: Map,
   MoreHorizontal,
   HardHat,
   Hotel,
@@ -64,10 +55,20 @@ export default function MobileTabBar() {
   const navigate = useNavigate()
   const { signOut } = useAuth()
 
-  const isMoreActive =
-    isMoreModuleActive(location.pathname) ||
-    location.pathname === MORE_PAGE_PATH ||
-    MOBILE_MORE.some((item) => isNavItemActive(location.pathname, item))
+  const isMoreActive = isMoreModuleActive(location.pathname)
+
+  const mobileMore = [
+    ...ASSET_NAV_ITEMS.filter((i) => !MOBILE_BAR.some((b) => b.path === i.path)),
+    ...MORE_NAV_ITEMS,
+    { path: '/tasks', label: '我的任务', icon: 'ListTodo' as NavIcon, matchPaths: ['/tasks'] },
+    { path: '/projects', label: '开发项目', icon: 'Hammer' as NavIcon, matchPaths: ['/projects'] },
+  ]
+
+  const barLabel = (path: string, label: string) => {
+    if (path === '/dashboard') return '首页'
+    if (path === '/matching/demands') return '需求'
+    return label.length > 4 ? label.slice(0, 4) : label
+  }
 
   return (
     <>
@@ -81,17 +82,13 @@ export default function MobileTabBar() {
           />
           <div className="absolute bottom-16 left-0 right-0 bg-white border-t border-gray-200 rounded-t-2xl shadow-xl max-h-[60vh] overflow-y-auto">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-semibold text-[#1B2B4B]">更多功能</p>
-              <button
-                type="button"
-                onClick={() => setMoreOpen(false)}
-                className="p-1 text-gray-400"
-              >
+              <p className="text-sm font-semibold text-[#1B2B4B]">更多</p>
+              <button type="button" onClick={() => setMoreOpen(false)} className="p-1 text-gray-400">
                 <X size={18} />
               </button>
             </div>
             <div className="grid grid-cols-3 gap-1 p-3">
-              {MOBILE_MORE.map((item) => {
+              {mobileMore.map((item) => {
                 const Icon = ICONS[item.icon]
                 const active = isNavItemActive(location.pathname, item)
                 return (
@@ -103,9 +100,7 @@ export default function MobileTabBar() {
                       setMoreOpen(false)
                     }}
                     className={`flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs ${
-                      active
-                        ? 'bg-[#1B2B4B]/5 text-[#1B2B4B]'
-                        : 'text-gray-600 hover:bg-gray-50'
+                      active ? 'bg-[#1B2B4B]/5 text-[#1B2B4B]' : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   >
                     <Icon size={20} strokeWidth={1.75} />
@@ -143,18 +138,8 @@ export default function MobileTabBar() {
                   active ? 'text-[#1B2B4B] font-medium' : 'text-gray-400'
                 }`}
               >
-                <Icon
-                  size={20}
-                  strokeWidth={1.75}
-                  className={active ? 'text-[#C9A84C]' : undefined}
-                />
-                {item.path === '/dashboard'
-                  ? '首页'
-                  : item.path === '/investors'
-                    ? '投资人'
-                    : item.path === '/matching/demands'
-                      ? '匹配'
-                      : item.label}
+                <Icon size={20} strokeWidth={1.75} className={active ? 'text-[#C9A84C]' : undefined} />
+                {barLabel(item.path, item.label)}
               </NavLink>
             )
           })}
@@ -165,11 +150,7 @@ export default function MobileTabBar() {
               isMoreActive ? 'text-[#1B2B4B] font-medium' : 'text-gray-400'
             }`}
           >
-            <MoreHorizontal
-              size={20}
-              strokeWidth={1.75}
-              className={isMoreActive ? 'text-[#C9A84C]' : undefined}
-            />
+            <MoreHorizontal size={20} strokeWidth={1.75} className={isMoreActive ? 'text-[#C9A84C]' : undefined} />
             更多
           </button>
         </div>

@@ -53,6 +53,9 @@ export default function MyTasksPanel() {
         {tasks.length > 0 && (
           <span className="text-gray-400 font-normal text-xs">（{tasks.length}）</span>
         )}
+        <Link to="/tasks" className="ml-auto text-xs text-[#C9A84C] hover:underline font-normal">
+          查看全部 →
+        </Link>
       </h2>
 
       {tasks.length === 0 ? (
